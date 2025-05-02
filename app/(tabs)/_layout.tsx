@@ -1,0 +1,120 @@
+import React from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Tabs } from "expo-router";
+import { Platform, StyleSheet, View, Text } from "react-native";
+import { BarChart2, Compass, Music, User } from "lucide-react-native";
+import Colors from "../../constants/colors";
+import { BlurView } from "expo-blur";
+import { useAuth } from "../../context/auth-context";
+import { Redirect } from "expo-router";
+import { usePlayerStore } from "../../store/player-store";
+
+function TabBarIcon(props: {
+  name: React.ReactNode;
+  color: string;
+}) {
+  return props.name;
+}
+
+export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const auth = useAuth();
+  const { isAuthenticated, isLoading } = auth;
+  const { currentTrack, isPlaying } = usePlayerStore();
+
+  if (isLoading) {
+    return null;
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect href="/login" />;
+  }
+
+  const tabBarStyles = StyleSheet.create({
+    tabBar: {
+      backgroundColor: Colors.background,
+      borderTopWidth: 0,
+      elevation: 0,
+      height: 60 + insets.bottom,
+      paddingBottom: insets.bottom,
+    }
+  });
+
+  return (
+    <Tabs
+      screenOptions={{
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textSecondary,
+        headerShown: false,
+        tabBarStyle: tabBarStyles.tabBar,
+        tabBarBackground: () =>
+          Platform.OS === 'ios' ? (
+            <BlurView intensity={80} style={StyleSheet.absoluteFill} tint="dark" />
+          ) : null,
+      }}
+    >
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "Stats",
+          tabBarIcon: ({ color }) => <TabBarIcon name={<BarChart2 size={24} color={color} />} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="trips"
+        options={{
+          title: "Trips",
+          tabBarIcon: ({ color }) => <TabBarIcon name={<Compass size={24} color={color} />} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="now-playing"
+        options={{
+          title: "Now Playing",
+          tabBarIcon: ({ color }) => (
+            <TabBarIcon
+              name={
+                <Music
+                  size={24}
+                  color={color}
+                  style={isPlaying ? styles.pulsingIcon : undefined}
+                />
+              }
+              color={color}
+            />
+          ),
+          tabBarLabel: ({ color }) => (
+            <>
+              {currentTrack && isPlaying && (
+                <View style={styles.playingIndicator} />
+              )}
+              <Text style={{ color, fontSize: 10, marginTop: 2 }}>
+                Now Playing
+              </Text>
+            </>
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Profile",
+          tabBarIcon: ({ color }) => <TabBarIcon name={<User size={24} color={color} />} color={color} />,
+        }}
+      />
+    </Tabs>
+  );
+}
+
+const styles = StyleSheet.create({
+  pulsingIcon: {
+    opacity: 0.9,
+  },
+  playingIndicator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Colors.primary,
+    marginBottom: 2,
+  },
+});
