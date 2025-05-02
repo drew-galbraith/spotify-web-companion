@@ -5,8 +5,8 @@ import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import { usePlayerStore } from '../../store/player-store';
 import Colors from '../../constants/colors';
-import { Play, Pause, SkipForward, SkipBack, ExternalLink, Heart, Share, Repeat, Shuffle, Music } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../../context/auth-context';
 import Slider from '@react-native-community/slider';
@@ -57,7 +57,7 @@ export default function NowPlayingScreen() {
         <StatusBar style="light" />
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.emptyContainer}>
-            <Music size={60} color={Colors.textSecondary} />
+            <Ionicons name="musical-notes-outline" size={60} color={Colors.textSecondary} />
             <Text style={styles.emptyText}>No track is currently playing</Text>
             <TouchableOpacity 
               style={styles.browseButton}
@@ -180,7 +180,7 @@ export default function NowPlayingScreen() {
 
           <View style={styles.controlsContainer}>
             <TouchableOpacity style={styles.secondaryControl}>
-              <Shuffle size={24} color={Colors.textSecondary} />
+              <Ionicons name="shuffle-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -188,7 +188,7 @@ export default function NowPlayingScreen() {
               onPress={handleSkipPrevious}
               disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
             >
-              <SkipBack size={28} color={Colors.text} />
+              <Ionicons name="play-skip-back" size={28} color={Colors.text} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -200,9 +200,9 @@ export default function NowPlayingScreen() {
               disabled={!isPlayable && !hasUri}
             >
               {isPlaying ? (
-                <Pause size={32} color={Colors.text} />
+                <Ionicons name="pause" size={32} color={Colors.text} />
               ) : (
-                <Play size={32} color={Colors.text} />
+                <Ionicons name="play" size={32} color={Colors.text} />
               )}
             </TouchableOpacity>
             
@@ -211,28 +211,28 @@ export default function NowPlayingScreen() {
               onPress={handleSkipNext}
               disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
             >
-              <SkipForward size={28} color={Colors.text} />
+              <Ionicons name="play-skip-forward" size={28} color={Colors.text} />
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.secondaryControl}>
-              <Repeat size={24} color={Colors.textSecondary} />
+              <Ionicons name="repeat-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 
           <View style={styles.actionsContainer}>
             <TouchableOpacity style={styles.actionButton}>
-              <Heart size={24} color={Colors.textSecondary} />
+              <Ionicons name="heart-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             <TouchableOpacity 
               style={styles.actionButton}
               onPress={handleOpenInSpotify}
             >
-              <ExternalLink size={24} color={Colors.textSecondary} />
+              <Ionicons name="open-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.actionButton}>
-              <Share size={24} color={Colors.textSecondary} />
+              <Ionicons name="share-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
 

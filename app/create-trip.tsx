@@ -3,8 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, Platfo
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useRouter } from "expo-router";
-import { Calendar, MapPin, X, Image as ImageIcon, Search, Edit, RefreshCw, Check } from "lucide-react-native";
 import Colors from "../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
 import { useTripStore } from "../store/trip-store";
@@ -431,7 +431,7 @@ export default function CreateTripScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <X size={24} color={Colors.text} />
+            <Ionicons name="close" size={24} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Trip</Text>
           <View style={styles.placeholder} />
@@ -443,7 +443,7 @@ export default function CreateTripScreen() {
               <Image source={{ uri: image }} style={styles.tripImage} contentFit="cover" />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <ImageIcon size={40} color={Colors.textSecondary} />
+                <Ionicons name="image-outline" size={40} color={Colors.textSecondary} />
                 <Text style={styles.imagePlaceholderText}>Add Cover Photo</Text>
               </View>
             )}
@@ -466,7 +466,7 @@ export default function CreateTripScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Destination</Text>
               <View style={styles.inputWrapper}>
-                <MapPin size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                <Ionicons name="location-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
                 <TextInput
                   style={styles.input}
                   placeholder="Where are you going?"
@@ -488,7 +488,7 @@ export default function CreateTripScreen() {
                       style={styles.suggestionItem}
                       onPress={() => selectLocation(suggestion)}
                     >
-                      <MapPin size={16} color={Colors.textSecondary} style={styles.suggestionIcon} />
+                      <Ionicons name="location-outline" size={16} color={Colors.textSecondary} style={styles.suggestionIcon} />
                       <View style={styles.suggestionTextContainer}>
                         <Text style={styles.suggestionText}>{suggestion.name}</Text>
                       </View>
@@ -505,7 +505,7 @@ export default function CreateTripScreen() {
                   style={styles.inputWrapper}
                   onPress={() => setShowStartDatePicker(true)}
                 >
-                  <Calendar size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                  <Ionicons name="calendar-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
                   <Text style={[styles.input, !startDate && styles.placeholderText]}>
                     {startDate || "Select date"}
                   </Text>
@@ -526,7 +526,7 @@ export default function CreateTripScreen() {
                   style={styles.inputWrapper}
                   onPress={() => setShowEndDatePicker(true)}
                 >
-                  <Calendar size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+                  <Ionicons name="calendar-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
                   <Text style={[styles.input, !endDate && styles.placeholderText]}>
                     {endDate || "Select date"}
                   </Text>
@@ -553,14 +553,14 @@ export default function CreateTripScreen() {
                         style={styles.descriptionControl} 
                         onPress={handleConfirmDescription}
                       >
-                        <Check size={18} color={Colors.primary} />
+                        <Ionicons name="checkmark-outline" size={18} color={Colors.primary} />
                       </TouchableOpacity>
                     ) : (
                       <TouchableOpacity 
                         style={styles.descriptionControl} 
                         onPress={handleEditDescription}
                       >
-                        <Edit size={18} color={Colors.textSecondary} />
+                        <Ionicons name="pencil-outline" size={18} color={Colors.textSecondary} />
                       </TouchableOpacity>
                     )}
                     <TouchableOpacity 
@@ -568,7 +568,7 @@ export default function CreateTripScreen() {
                       onPress={handleGenerateDescription}
                       disabled={isGeneratingDescription || !(tripName || destination) || !startDate || !endDate}
                     >
-                      <RefreshCw size={18} color={
+                      <Ionicons name="refresh-outline" size={18} color={
                         isGeneratingDescription || !(tripName || destination) || !startDate || !endDate 
                           ? Colors.divider 
                           : Colors.textSecondary

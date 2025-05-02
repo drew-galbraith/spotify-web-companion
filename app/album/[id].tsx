@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Play, Pause, Heart, Clock, ArrowLeft, ExternalLink, Smartphone } from "lucide-react-native";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useSpotifyAlbum } from "../../hooks/use-spotify-album";
 import { usePlayerStore } from "../../store/player-store";
 import { useAuth } from "../../context/auth-context";
@@ -112,7 +112,7 @@ export default function AlbumScreen() {
           style={styles.backButton} 
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         
         <FlatList
@@ -152,7 +152,7 @@ export default function AlbumScreen() {
                 
                 {Platform.OS === 'ios' && isSpotifyConnectActive && activeDevice && (
                   <View style={styles.deviceInfo}>
-                    <Smartphone size={16} color={Colors.accent} style={styles.deviceIcon} />
+                    <Ionicons name="phone-portrait-outline" size={16} color={Colors.accent} style={styles.deviceIcon} />
                     <Text style={styles.deviceText}>Playing on: {activeDevice.name}</Text>
                   </View>
                 )}
@@ -160,7 +160,7 @@ export default function AlbumScreen() {
               
               <View style={styles.controls}>
                 <TouchableOpacity style={styles.heartButton}>
-                  <Heart size={24} color={Colors.textSecondary} />
+                  <Ionicons name="heart-outline" size={24} color={Colors.textSecondary} />
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
@@ -172,9 +172,9 @@ export default function AlbumScreen() {
                   disabled={!firstPlayableTrack}
                 >
                   {isPlaying && currentTrack?.id === album.tracks[0]?.id ? (
-                    <Pause size={30} color={Colors.text} />
+                    <Ionicons name="pause" size={30} color={Colors.text} />
                   ) : (
-                    <Play size={30} color={Colors.text} />
+                    <Ionicons name="play" size={30} color={Colors.text} />
                   )}
                 </TouchableOpacity>
                 
@@ -183,7 +183,7 @@ export default function AlbumScreen() {
                     style={styles.spotifyButton} 
                     onPress={handleOpenInSpotify}
                   >
-                    <ExternalLink size={24} color={Colors.text} />
+                    <Ionicons name="open-outline" size={24} color={Colors.text} />
                   </TouchableOpacity>
                 )}
                 
@@ -192,7 +192,7 @@ export default function AlbumScreen() {
                     style={styles.deviceButton}
                     onPress={handleDevicePress}
                   >
-                    <Smartphone size={24} color={Colors.textSecondary} />
+                    <Ionicons name="phone-portrait-outline" size={24} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -220,13 +220,13 @@ export default function AlbumScreen() {
               {/* Progress bar for iOS Spotify Connect */}
               {Platform.OS === 'ios' && isSpotifyConnectActive && isPlaying && (
                 <View style={styles.progressContainer}>
-                  <PlayerControls compact={true} showProgress={true} />
+                  <Ionicons name="play"erControls compact={true} showProgress={true} />
                 </View>
               )}
               
               <View style={styles.trackHeader}>
                 <Text style={styles.trackHeaderTitle}># TITLE</Text>
-                <Clock size={16} color={Colors.textSecondary} />
+                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
               </View>
             </View>
           }

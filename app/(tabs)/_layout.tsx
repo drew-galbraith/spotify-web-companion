@@ -2,7 +2,7 @@ import React from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Tabs } from "expo-router";
 import { Platform, StyleSheet, View, Text } from "react-native";
-import { BarChart2, Compass, Music, User } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Colors from "../../constants/colors";
 import { BlurView } from "expo-blur";
 import { useAuth } from "../../context/auth-context";
@@ -57,14 +57,14 @@ export default function TabLayout() {
         name="index"
         options={{
           title: "Stats",
-          tabBarIcon: ({ color }) => <TabBarIcon name={<BarChart2 size={24} color={color} />} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="stats-chart-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
         name="trips"
         options={{
           title: "Trips",
-          tabBarIcon: ({ color }) => <TabBarIcon name={<Compass size={24} color={color} />} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="compass-outline" size={24} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -72,16 +72,7 @@ export default function TabLayout() {
         options={{
           title: "Now Playing",
           tabBarIcon: ({ color }) => (
-            <TabBarIcon
-              name={
-                <Music
-                  size={24}
-                  color={color}
-                  style={isPlaying ? styles.pulsingIcon : undefined}
-                />
-              }
-              color={color}
-            />
+            <Ionicons name="musical-notes-outline" size={24} color={color} style={isPlaying ? styles.pulsingIcon : undefined} />
           ),
           tabBarLabel: ({ color }) => (
             <>
@@ -99,7 +90,7 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color }) => <TabBarIcon name={<User size={24} color={color} />} color={color} />,
+          tabBarIcon: ({ color }) => <Ionicons name="person-outline" size={24} color={color} />,
         }}
       />
     </Tabs>

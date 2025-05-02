@@ -389,14 +389,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       console.log("Opening auth URL:", authUrl.toString());
       
-      // Open the browser for authentication
+      //FIX: Remove this alert in production
+      // alert(authUrl.toString());
+      // alert(redirectUri);
+
+      //Open the browser for authentication
       const result = await WebBrowser.openAuthSessionAsync(
         authUrl.toString(),
         redirectUri
       );
       
       console.log("Auth result:", JSON.stringify(result));
-      
+
       if (result.type === 'success' && result.url) {
         // Extract the authorization code from the URL
         const url = result.url;

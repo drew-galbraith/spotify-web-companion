@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Play, Pause, Heart, MoreHorizontal, ArrowLeft, AlertCircle, ExternalLink, Smartphone } from "lucide-react-native";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useSpotifyTrack } from "../../hooks/use-spotify-track";
 import { usePlayerStore } from "../../store/player-store";
 import { useAuth } from "../../context/auth-context";
@@ -131,7 +131,7 @@ export default function TrackScreen() {
           style={styles.backButton} 
           onPress={() => router.back()}
         >
-          <ArrowLeft size={24} color={Colors.text} />
+          <Ionicons name="arrow-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         
         <ScrollView 
@@ -155,7 +155,7 @@ export default function TrackScreen() {
           
           <View style={styles.controls}>
             <TouchableOpacity style={styles.heartButton}>
-              <Heart size={24} color={Colors.textSecondary} />
+              <Ionicons name="heart-outline" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             {isPlayerLoading && isCurrentTrack ? (
@@ -169,9 +169,9 @@ export default function TrackScreen() {
                 disabled={!isPlayable && !hasUri}
               >
                 {isCurrentTrack && isPlaying ? (
-                  <Pause size={30} color={Colors.text} />
+                  <Ionicons name="pause" size={30} color={Colors.text} />
                 ) : (
-                  <Play size={30} color={Colors.text} />
+                  <Ionicons name="play" size={30} color={Colors.text} />
                 )}
               </TouchableOpacity>
             )}
@@ -181,7 +181,7 @@ export default function TrackScreen() {
                 style={styles.spotifyButton} 
                 onPress={handleOpenInSpotify}
               >
-                <ExternalLink size={24} color={Colors.text} />
+                <Ionicons name="open-outline" size={24} color={Colors.text} />
               </TouchableOpacity>
             )}
             
@@ -190,12 +190,12 @@ export default function TrackScreen() {
                 style={styles.deviceButton}
                 onPress={handleDevicePress}
               >
-                <Smartphone size={24} color={Colors.textSecondary} />
+                <Ionicons name="phone-portrait-outline" size={24} color={Colors.textSecondary} />
               </TouchableOpacity>
             )}
             
             <TouchableOpacity style={styles.moreButton}>
-              <MoreHorizontal size={24} color={Colors.textSecondary} />
+              <Ionicons name="ellipsis-horizontal" size={24} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
           
@@ -230,7 +230,7 @@ export default function TrackScreen() {
           
           {playerError && isCurrentTrack && (
             <View style={styles.errorContainer}>
-              <AlertCircle size={16} color={Colors.error} style={styles.errorIcon} />
+              <Ionicons name="alert-circle-outline" size={16} color={Colors.error} style={styles.errorIcon} />
               <Text style={styles.errorText}>{playerError}</Text>
               
               {playerError.includes("Open in Spotify") && track.uri && Platform.OS !== 'web' && (
@@ -265,7 +265,7 @@ export default function TrackScreen() {
           {/* Progress bar for iOS Spotify Connect */}
           {Platform.OS === 'ios' && isSpotifyConnectActive && isCurrentTrack && (
             <View style={styles.progressContainer}>
-              <PlayerControls showProgress={true} />
+              <Ionicons name="play"erControls showProgress={true} />
             </View>
           )}
           
@@ -448,7 +448,7 @@ export default function TrackScreen() {
                   style={styles.openSpotifyFullButton}
                   onPress={handleOpenInSpotify}
                 >
-                  <ExternalLink size={16} color={Colors.text} style={styles.openSpotifyIcon} />
+                  <Ionicons name="open-outline" size={16} color={Colors.text} style={styles.openSpotifyIcon} />
                   <Text style={styles.openSpotifyFullText}>Open in Spotify</Text>
                 </TouchableOpacity>
               )}

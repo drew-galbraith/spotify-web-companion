@@ -1,7 +1,8 @@
 {
-  "name": "expo-app",
-  "main": "expo-router/entry",
+  "name": "wander-tunes",
   "version": "1.0.0",
+  "main": "expo-router/entry",
+  "private": true,
   "scripts": {
     "start": "expo start --tunnel",
     "start-web": "expo start --web --tunnel",
@@ -34,7 +35,6 @@
     "expo-system-ui": "~5.0.6",
     "expo-video": "~2.1.8",
     "expo-web-browser": "~14.1.6",
-    "lucide-react-native": "^0.475.0",
     "nativewind": "^4.1.23",
     "react": "19.0.0",
     "react-dom": "19.0.0",
@@ -43,14 +43,11 @@
     "react-native-safe-area-context": "5.3.0",
     "react-native-screens": "~4.10.0",
     "react-native-svg": "15.11.2",
-    "react-native-web": "^0.20.0",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
-    "@expo/ngrok": "^4.1.0",
     "@types/react": "~19.0.10",
     "typescript": "~5.8.3"
-  },
-  "private": true
+  }
 }

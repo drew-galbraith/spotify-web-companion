@@ -1,6 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Platform } from 'react-native';
-import { X, Play, Pause, Volume2, SkipForward, SkipBack } from 'lucide-react-native';
 import { BlurView } from 'expo-blur';
 import { usePlayerStore } from '../store/player-store';
 import { useAuth } from '../context/auth-context';
@@ -44,7 +44,7 @@ export default function WebPlayerControls() {
         style={styles.closeButton}
         onPress={handleClose}
       >
-        <X size={20} color={Colors.text} />
+        <Ionicons name="close" size={20} color={Colors.text} />
       </TouchableOpacity>
       
       <Text style={styles.title}>Spotify Web Player</Text>
@@ -60,7 +60,7 @@ export default function WebPlayerControls() {
           
           <View style={styles.controls}>
             <TouchableOpacity style={styles.controlButton}>
-              <SkipBack size={20} color={Colors.textSecondary} />
+              <Ionicons name="play-skip-back" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -68,18 +68,18 @@ export default function WebPlayerControls() {
               onPress={handlePlayPause}
             >
               {isPlaying ? (
-                <Pause size={24} color={Colors.text} />
+                <Ionicons name="pause" size={24} color={Colors.text} />
               ) : (
-                <Play size={24} color={Colors.text} />
+                <Ionicons name="play" size={24} color={Colors.text} />
               )}
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.controlButton}>
-              <SkipForward size={20} color={Colors.textSecondary} />
+              <Ionicons name="play-skip-forward" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
             
             <TouchableOpacity style={styles.controlButton}>
-              <Volume2 size={20} color={Colors.textSecondary} />
+              <Ionicons name="volume-high" size={20} color={Colors.textSecondary} />
             </TouchableOpacity>
           </View>
           

@@ -15,14 +15,17 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.wandertunes"
+      "bundleIdentifier": "com.scubadrew0716.wandertunes",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0F172A"
       },
-      "package": "app.rork.wandertunes",
+      "package": "com.scubadrew0716.wandertunes",
       "permissions": [
         "android.permission.RECORD_AUDIO"
       ]
@@ -34,7 +37,7 @@
       [
         "expo-router",
         {
-          "origin": "https://rork.app/"
+          "origin": "https://info.wandertunes.app/"
         }
       ],
       [
@@ -47,14 +50,14 @@
     "experiments": {
       "typedRoutes": true
     },
+    "owner": "scubadrew0716",
     "extra": {
       "router": {
-        "origin": "https://rork.app/"
+        "origin": "https://info.wandertunes.app/"
       },
       "eas": {
         "projectId": "31bda9e7-6f12-442d-8685-783f78c4e7c4"
       }
-    },
-    "owner": "scubadrew0716"
+    }
   }
 }

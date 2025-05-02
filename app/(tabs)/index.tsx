@@ -4,9 +4,9 @@ import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import Colors from "../../constants/colors";
 import { useSpotifyStats } from "../../hooks/use-spotify-stats";
+import { Ionicons } from "@expo/vector-icons";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
-import { BarChart2, Clock, Disc, Music, TrendingUp } from "lucide-react-native";
 import StatCard from "../../components/stat-card";
 import TopItemsList from "../../components/top-items-list";
 import GenreDistribution from "../../components/genre-distribution";
@@ -75,7 +75,7 @@ export default function StatsScreen() {
                     {currentTrack.name} • {currentTrack.artists[0]}
                   </Text>
                 </View>
-                <Music size={20} color={Colors.primary} />
+                <Ionicons name="musical-notes-outline" size={20} color={Colors.primary} />
               </TouchableOpacity>
             )}
           </View>
@@ -84,12 +84,12 @@ export default function StatsScreen() {
             <StatCard 
               title="Minutes Listened" 
               value={listeningTime.toString()} 
-              icon={<Clock size={24} color={Colors.primary} />}
+              icon={<Ionicons name="time-outline" size={24} color={Colors.primary} />}
             />
             <StatCard 
               title="Top Genre" 
               value={topGenre} 
-              icon={<Music size={24} color={Colors.primary} />}
+              icon={<Ionicons name="musical-notes-outline" size={24} color={Colors.primary} />}
             />
           </View>
 
@@ -97,12 +97,12 @@ export default function StatsScreen() {
             <StatCard 
               title="Tracks" 
               value={trackCount.toString()} 
-              icon={<Disc size={24} color={Colors.primary} />}
+              icon={<Ionicons name="disc-outline" size={24} color={Colors.primary} />}
             />
             <StatCard 
               title="Artists" 
               value={artistCount.toString()} 
-              icon={<TrendingUp size={24} color={Colors.primary} />}
+              icon={<Ionicons name="trending-up-outline" size={24} color={Colors.primary} />}
             />
           </View>
 

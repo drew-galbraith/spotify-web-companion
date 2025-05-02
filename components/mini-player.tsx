@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, TouchableOpacity, Platform, ActivityIndicator, Animated } from "react-native";
 import { Image } from "expo-image";
-import { Play, Pause, SkipForward, SkipBack, ExternalLink, ChevronDown, ChevronUp, X, Smartphone } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
@@ -167,9 +167,9 @@ export default function MiniPlayer() {
         onPress={togglePlayerVisibility}
       >
         {isPlayerVisible ? (
-          <ChevronDown size={20} color={Colors.text} />
+          <Ionicons Ionicons name="chevron-down" size={20} color={Colors.text} />
         ) : (
-          <ChevronUp size={20} color={Colors.text} />
+          <Ionicons Ionicons name="chevron-up" size={20} color={Colors.text} />
         )}
       </TouchableOpacity>
       
@@ -177,7 +177,7 @@ export default function MiniPlayer() {
         style={styles.closeButton}
         onPress={handleClose}
       >
-        <X size={20} color={Colors.text} />
+        <Ionicons Ionicons name="close" size={20} color={Colors.text} />
       </TouchableOpacity>
       
       <TouchableOpacity 
@@ -219,13 +219,13 @@ export default function MiniPlayer() {
               style={styles.deviceButton} 
               onPress={handleDevicePress}
             >
-              <Smartphone size={20} color={Colors.text} />
+              <Ionicons Ionicons name="phone-portrait" size={20} color={Colors.text} />
             </TouchableOpacity>
           )}
           
           {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
             <TouchableOpacity style={styles.controlButton} onPress={handleOpenInSpotify}>
-              <ExternalLink size={20} color={Colors.text} />
+              <Ionicons Ionicons name="open-outline" size={20} color={Colors.text} />
             </TouchableOpacity>
           )}
           
@@ -234,7 +234,7 @@ export default function MiniPlayer() {
             onPress={handleSkipPrevious}
             disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
           >
-            <SkipBack size={20} color={Colors.text} />
+            <Ionicons Ionicons name="play-skip-back" size={20} color={Colors.text} />
           </TouchableOpacity>
           
           {isLoading ? (
@@ -251,9 +251,9 @@ export default function MiniPlayer() {
               disabled={!isPlayable && !hasUri}
             >
               {isPlaying ? (
-                <Pause size={20} color={Colors.text} />
+                <Ionicons Ionicons name="pause" size={20} color={Colors.text} />
               ) : (
-                <Play size={20} color={Colors.text} />
+                <Ionicons Ionicons name="play" size={20} color={Colors.text} />
               )}
             </TouchableOpacity>
           )}
@@ -263,7 +263,7 @@ export default function MiniPlayer() {
             onPress={handleSkipNext}
             disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
           >
-            <SkipForward size={20} color={Colors.text} />
+            <Ionicons Ionicons name="play-skip-forward" size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>

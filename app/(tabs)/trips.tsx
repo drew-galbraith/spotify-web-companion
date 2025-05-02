@@ -3,8 +3,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Plus, Calendar, MapPin, Music, Trash2 } from "lucide-react-native";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useTripStore } from "../../store/trip-store";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePlayerStore } from "../../store/player-store";
@@ -61,11 +61,11 @@ export default function TripsScreen() {
           <Text style={styles.tripDestination}>{item.destination}</Text>
           <View style={styles.tripDetails}>
             <View style={styles.tripDetail}>
-              <Calendar size={14} color={Colors.text} style={styles.tripIcon} />
+              <Ionicons name="calendar-outline" size={14} color={Colors.text} style={styles.tripIcon} />
               <Text style={styles.tripDetailText}>{item.dates}</Text>
             </View>
             <View style={styles.tripDetail}>
-              <MapPin size={14} color={Colors.text} style={styles.tripIcon} />
+              <Ionicons name="location-outline" size={14} color={Colors.text} style={styles.tripIcon} />
               <Text style={styles.tripDetailText}>{item.location}</Text>
             </View>
           </View>
@@ -82,7 +82,7 @@ export default function TripsScreen() {
           onPress={(e) => handleDeleteTrip(item.id, item.name || item.destination, e)}
           disabled={isDeleting}
         >
-          <Trash2 size={18} color={Colors.text} />
+          <Ionicons name="trash-outline" size={18} color={Colors.text} />
         </TouchableOpacity>
         
         {isDeleting && deletingTripId === item.id && (
@@ -101,7 +101,7 @@ export default function TripsScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Your Trips</Text>
           <TouchableOpacity style={styles.createButton} onPress={handleCreateTrip}>
-            <Plus size={24} color={Colors.text} />
+            <Ionicons name="add" size={24} color={Colors.text} />
           </TouchableOpacity>
         </View>
 
@@ -123,7 +123,7 @@ export default function TripsScreen() {
                 {currentTrack.name} • {currentTrack.artists[0]}
               </Text>
             </View>
-            <Music size={20} color={Colors.primary} />
+            <Ionicons name="musical-notes-outline" size={20} color={Colors.primary} />
           </TouchableOpacity>
         )}
 

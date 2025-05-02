@@ -2,8 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, Platform, RefreshControl } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
-import { Calendar, MapPin, Music, ArrowLeft, Play, Pause, Heart, Trash2, MoreVertical } from "lucide-react-native";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useTrip } from "../../hooks/use-trip";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
@@ -196,7 +196,7 @@ export default function TripScreen() {
               style={styles.backButton} 
               onPress={() => router.back()}
             >
-              <ArrowLeft size={24} color={Colors.text} />
+              <Ionicons name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -204,7 +204,7 @@ export default function TripScreen() {
               onPress={toggleOptionsMenu}
               ref={optionsMenuRef}
             >
-              <MoreVertical size={24} color={Colors.text} />
+              <Ionicons name="ellipsis-vertical" size={24} color={Colors.text} />
             </TouchableOpacity>
             
             {showOptionsMenu && (
@@ -216,7 +216,7 @@ export default function TripScreen() {
                     handleDeleteTrip();
                   }}
                 >
-                  <Trash2 size={18} color={Colors.error} style={styles.optionIcon} />
+                  <Ionicons name="trash-outline" size={18} color={Colors.error} style={styles.optionIcon} />
                   <Text style={[styles.optionText, { color: Colors.error }]}>Delete Trip</Text>
                 </TouchableOpacity>
               </View>
@@ -228,11 +228,11 @@ export default function TripScreen() {
             
             <View style={styles.tripDetails}>
               <View style={styles.tripDetail}>
-                <Calendar size={16} color={Colors.primary} style={styles.tripIcon} />
+                <Ionicons name="calendar-outline" size={16} color={Colors.primary} style={styles.tripIcon} />
                 <Text style={styles.tripDetailText}>{trip.dates}</Text>
               </View>
               <View style={styles.tripDetail}>
-                <MapPin size={16} color={Colors.primary} style={styles.tripIcon} />
+                <Ionicons name="location-outline" size={16} color={Colors.primary} style={styles.tripIcon} />
                 <Text style={styles.tripDetailText}>{trip.location}</Text>
               </View>
             </View>
@@ -266,7 +266,7 @@ export default function TripScreen() {
                           style={styles.deletePlaylistButton}
                           onPress={() => handleDeletePlaylist(playlist.id, playlist.name)}
                         >
-                          <Trash2 size={16} color={Colors.error} />
+                          <Ionicons name="trash-outline" size={16} color={Colors.error} />
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.playlistTracks}>{playlist.trackCount} tracks</Text>
@@ -279,9 +279,9 @@ export default function TripScreen() {
                           {currentTrack && 
                            currentTrack.playlistId === playlist.id && 
                            isPlaying ? (
-                            <Pause size={20} color={Colors.text} />
+                            <Ionicons name="pause" size={20} color={Colors.text} />
                           ) : (
-                            <Play size={20} color={Colors.text} />
+                            <Ionicons name="play" size={20} color={Colors.text} />
                           )}
                         </TouchableOpacity>
                         
@@ -323,9 +323,9 @@ export default function TripScreen() {
                               {currentTrack && 
                                currentTrack.id === track.id && 
                                isPlaying ? (
-                                <Pause size={16} color={Colors.primary} />
+                                <Ionicons name="pause" size={16} color={Colors.primary} />
                               ) : (
-                                <Play size={16} color={Colors.textSecondary} />
+                                <Ionicons name="play" size={16} color={Colors.textSecondary} />
                               )}
                             </TouchableOpacity>
                           ))}
@@ -347,7 +347,7 @@ export default function TripScreen() {
               </View>
             ) : !isDeleting ? (
               <View style={styles.emptyPlaylists}>
-                <Music size={40} color={Colors.primary} style={styles.emptyIcon} />
+                <Ionicons name="musical-notes-outline" size={40} color={Colors.primary} style={styles.emptyIcon} />
                 <Text style={styles.emptyText}>No playlists yet</Text>
                 {isCreating ? (
                   <View style={styles.creatingContainer}>

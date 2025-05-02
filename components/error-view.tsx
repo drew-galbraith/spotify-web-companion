@@ -1,6 +1,6 @@
 import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import Colors from "../constants/colors";
-import { AlertTriangle, RefreshCw } from "lucide-react-native";
+import { Ionicons } from "@expo/vector-icons";
 
 interface ErrorViewProps {
   message?: string;
@@ -10,12 +10,12 @@ interface ErrorViewProps {
 export default function ErrorView({ message = "Something went wrong", onRetry }: ErrorViewProps) {
   return (
     <View style={styles.container}>
-      <AlertTriangle size={48} color={Colors.error} style={styles.icon} />
+      <Ionicons name="warning-outline" size={48} color={Colors.error} style={styles.icon} />
       <Text style={styles.message}>{message}</Text>
       
       {onRetry && (
         <TouchableOpacity style={styles.retryButton} onPress={onRetry}>
-          <RefreshCw size={16} color={Colors.text} style={styles.retryIcon} />
+          <Ionicons name="refresh-outline" size={16} color={Colors.text} style={styles.retryIcon} />
           <Text style={styles.retryText}>Try Again</Text>
         </TouchableOpacity>
       )}

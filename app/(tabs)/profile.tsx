@@ -3,11 +3,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../context/auth-context";
 import { useSpotifyProfile } from "../../hooks/use-spotify-profile";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
-import { LogOut, Settings, User, Music, Map, Heart } from "lucide-react-native";
 import { usePlayerStore } from "../../store/player-store";
 import { useRouter } from "expo-router";
 import { useMemo } from "react";
@@ -43,7 +43,7 @@ export default function ProfileScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Profile</Text>
             <TouchableOpacity style={styles.settingsButton}>
-              <Settings size={24} color={Colors.text} />
+              <Ionicons name="settings-outline" size={24} color={Colors.text}      />
             </TouchableOpacity>
           </View>
 
@@ -65,7 +65,7 @@ export default function ProfileScreen() {
                   {currentTrack.name} • {currentTrack.artists[0]}
                 </Text>
               </View>
-              <Music size={20} color={Colors.primary} />
+              <Ionicons name="musical-notes-outline" size={20} color={Colors.primary}      />
             </TouchableOpacity>
           )}
 
@@ -78,7 +78,7 @@ export default function ProfileScreen() {
               />
             ) : (
               <View style={styles.profileImagePlaceholder}>
-                <User size={40} color={Colors.text} />
+                <Ionicons name="person-circle-outline" size={40} color={Colors.text}      />
               </View>
             )}
             <Text style={styles.profileName}>{profileData?.displayName || "Music Lover"}</Text>
@@ -102,21 +102,21 @@ export default function ProfileScreen() {
 
           <View style={styles.menuSection}>
             <TouchableOpacity style={styles.menuItem}>
-              <Music size={24} color={Colors.text} style={styles.menuIcon} />
+              <Ionicons name="musical-notes-outline" size={24} color={Colors.text}     style={styles.menuIcon}  />
               <Text style={styles.menuText}>Spotify Account Settings</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem}>
-              <Map size={24} color={Colors.text} style={styles.menuIcon} />
+              <Ionicons name="map-outline" size={24} color={Colors.text}     style={styles.menuIcon}  />
               <Text style={styles.menuText}>Travel Preferences</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.menuItem}>
-              <Heart size={24} color={Colors.text} style={styles.menuIcon} />
+              <Ionicons name="heart-outline" size={24} color={Colors.text}     style={styles.menuIcon}  />
               <Text style={styles.menuText}>Favorite Genres</Text>
             </TouchableOpacity>
           </View>
 
           <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-            <LogOut size={20} color={Colors.text} style={styles.logoutIcon} />
+            <Ionicons name="log-out-outline" size={20} color={Colors.text}     style={styles.logoutIcon}  />
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
 

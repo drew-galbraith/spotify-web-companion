@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
-import { Play, Pause, SkipForward, SkipBack, ExternalLink, Smartphone } from 'lucide-react-native';
 import Colors from '../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '../store/player-store';
 import { useAuth } from '../context/auth-context';
 import Slider from '@react-native-community/slider';
@@ -113,16 +113,16 @@ export default function PlayerControls({ compact = false, showProgress = false }
             disabled={!isPlayable && !hasUri}
           >
             {isPlaying ? (
-              <Pause size={16} color={Colors.text} />
+              <Ionicons name="pause" size={16} color={Colors.text} />
             ) : (
-              <Play size={16} color={Colors.text} />
+              <Ionicons name="play" size={16} color={Colors.text} />
             )}
           </TouchableOpacity>
         )}
         
         {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
           <TouchableOpacity style={styles.compactControlButton} onPress={handleOpenInSpotify}>
-            <ExternalLink size={16} color={Colors.textSecondary} />
+            <Ionicons name="open-outline" size={16} color={Colors.textSecondary} />
           </TouchableOpacity>
         )}
       </View>
@@ -159,7 +159,7 @@ export default function PlayerControls({ compact = false, showProgress = false }
               // Show device selection UI here
             }}
           >
-            <Smartphone size={20} color={Colors.textSecondary} />
+            <Ionicons name="phone-portrait-outline" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
         )}
         
@@ -168,7 +168,7 @@ export default function PlayerControls({ compact = false, showProgress = false }
           onPress={handleSkipPrevious}
           disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
         >
-          <SkipBack size={24} color={Colors.text} />
+          <Ionicons name="play-skip-back" size={24} color={Colors.text} />
         </TouchableOpacity>
         
         {isLoading ? (
@@ -185,9 +185,9 @@ export default function PlayerControls({ compact = false, showProgress = false }
             disabled={!isPlayable && !hasUri}
           >
             {isPlaying ? (
-              <Pause size={24} color={Colors.text} />
+              <Ionicons name="pause" size={24} color={Colors.text} />
             ) : (
-              <Play size={24} color={Colors.text} />
+              <Ionicons name="play" size={24} color={Colors.text} />
             )}
           </TouchableOpacity>
         )}
@@ -197,12 +197,12 @@ export default function PlayerControls({ compact = false, showProgress = false }
           onPress={handleSkipNext}
           disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
         >
-          <SkipForward size={24} color={Colors.text} />
+          <Ionicons name="play-skip-forward" size={24} color={Colors.text} />
         </TouchableOpacity>
         
         {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
           <TouchableOpacity style={styles.controlButton} onPress={handleOpenInSpotify}>
-            <ExternalLink size={20} color={Colors.textSecondary} />
+            <Ionicons name="open-outline" size={20} color={Colors.textSecondary} />
           </TouchableOpacity>
         )}
         

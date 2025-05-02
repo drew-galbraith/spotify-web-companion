@@ -4,8 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Play, Pause, Heart, Clock, ArrowLeft, MapPin, Music2, ExternalLink, Smartphone } from "lucide-react-native";
 import Colors from "../../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { useTravelPlaylist } from "../../hooks/use-travel-playlist";
 import { usePlayerStore } from "../../store/player-store";
 import { useAuth } from "../../context/auth-context";
@@ -126,7 +126,7 @@ export default function PlaylistScreen() {
         >
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-              <ArrowLeft size={24} color={Colors.text} />
+              <Ionicons name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>
             
             <View style={styles.playlistInfo}>
@@ -139,17 +139,17 @@ export default function PlaylistScreen() {
               <View style={styles.playlistDetails}>
                 <Text style={styles.playlistName}>{playlist.name}</Text>
                 <View style={styles.playlistMeta}>
-                  <MapPin size={16} color={Colors.textSecondary} style={styles.metaIcon} />
+                  <Ionicons name="location-outline" size={16} color={Colors.textSecondary} style={styles.metaIcon} />
                   <Text style={styles.playlistLocation}>{playlist.location || "Travel Playlist"}</Text>
                 </View>
                 <View style={styles.playlistMeta}>
-                  <Music2 size={16} color={Colors.textSecondary} style={styles.metaIcon} />
+                  <Ionicons name="musical-notes-outline" size={16} color={Colors.textSecondary} style={styles.metaIcon} />
                   <Text style={styles.playlistTrackCount}>{playlist.tracks ? playlist.tracks.length : 0} tracks</Text>
                 </View>
                 
                 {Platform.OS === 'ios' && isSpotifyConnectActive && activeDevice && (
                   <View style={styles.playlistMeta}>
-                    <Smartphone size={16} color={Colors.accent} style={styles.metaIcon} />
+                    <Ionicons name="phone-portrait-outline" size={16} color={Colors.accent} style={styles.metaIcon} />
                     <Text style={styles.playlistDevice}>Playing on: {activeDevice.name}</Text>
                   </View>
                 )}
@@ -168,21 +168,21 @@ export default function PlaylistScreen() {
                 {isPlayerLoading ? (
                   <ActivityIndicator size="small" color={Colors.text} />
                 ) : isPlaying && currentTrack?.id === (playlist.tracks && playlist.tracks.length > 0 ? playlist.tracks[0]?.id : null) ? (
-                  <Pause size={24} color={Colors.text} />
+                  <Ionicons name="pause" size={24} color={Colors.text} />
                 ) : (
-                  <Play size={24} color={Colors.text} />
+                  <Ionicons name="play" size={24} color={Colors.text} />
                 )}
               </TouchableOpacity>
               
               <TouchableOpacity style={styles.heartButton}>
-                <Heart size={24} color={Colors.textSecondary} />
+                <Ionicons name="heart-outline" size={24} color={Colors.textSecondary} />
               </TouchableOpacity>
               
               <TouchableOpacity 
                 style={styles.spotifyButton}
                 onPress={handleOpenInSpotify}
               >
-                <ExternalLink size={20} color={Colors.text} />
+                <Ionicons name="open-outline" size={20} color={Colors.text} />
               </TouchableOpacity>
               
               {Platform.OS === 'ios' && isPremium && (
@@ -190,7 +190,7 @@ export default function PlaylistScreen() {
                   style={styles.deviceButton}
                   onPress={handleDevicePress}
                 >
-                  <Smartphone size={20} color={Colors.text} />
+                  <Ionicons name="phone-portrait-outline" size={20} color={Colors.text} />
                 </TouchableOpacity>
               )}
             </View>
@@ -218,7 +218,7 @@ export default function PlaylistScreen() {
             {/* Progress bar for iOS Spotify Connect */}
             {Platform.OS === 'ios' && isSpotifyConnectActive && isPlaying && (
               <View style={styles.progressContainer}>
-                <PlayerControls compact={true} showProgress={true} />
+                <Ionicons name="play"erControls compact={true} showProgress={true} />
               </View>
             )}
           </View>
@@ -239,7 +239,7 @@ export default function PlaylistScreen() {
               <View style={styles.listHeaderRow}>
                 <Text style={styles.listHeaderNumber}>#</Text>
                 <Text style={styles.listHeaderTitle}>TITLE</Text>
-                <Clock size={16} color={Colors.textSecondary} />
+                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
               </View>
               <View style={styles.divider} />
             </View>

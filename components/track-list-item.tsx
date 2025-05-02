@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import { Image } from 'expo-image';
-import { ExternalLink } from 'lucide-react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
 import { usePlayerStore } from '../store/player-store';
 
@@ -132,7 +132,7 @@ export default function TrackListItem({
               style={styles.spotifyButton} 
               onPress={handleOpenInSpotify}
             >
-              <ExternalLink size={16} color="#FFFFFF" />
+              <Ionicons name="open-outline" size={16} color="#FFFFFF" />
             </TouchableOpacity>
           )}
           <Text style={[styles.duration, isActiveTrack && styles.activeText]}>

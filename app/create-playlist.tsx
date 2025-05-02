@@ -3,8 +3,8 @@ import { StyleSheet, Text, View, TextInput, TouchableOpacity, FlatList, Activity
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { X, Search, Music, Plus, Check, MapPin, Sparkles, Edit, RefreshCw } from "lucide-react-native";
 import Colors from "../constants/colors";
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useTripStore } from "../store/trip-store";
 import { useSpotifyApi } from "../hooks/use-spotify-api";
@@ -832,9 +832,9 @@ export default function CreatePlaylistScreen() {
         </View>
         <View style={[styles.selectIndicator, isSelected && styles.selectedIndicator]}>
           {isSelected ? (
-            <Check size={16} color={Colors.text} />
+            <Ionicons name="checkmark-outline" size={16} color={Colors.text} />
           ) : (
-            <Plus size={16} color={Colors.textSecondary} />
+            <Ionicons name="add" size={16} color={Colors.textSecondary} />
           )}
         </View>
       </TouchableOpacity>
@@ -877,7 +877,7 @@ export default function CreatePlaylistScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <View style={styles.header}>
           <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-            <X size={24} color={Colors.text} />
+            <Ionicons name="close" size={24} color={Colors.text} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Create Playlist</Text>
           <View style={styles.placeholder} />
@@ -891,7 +891,7 @@ export default function CreatePlaylistScreen() {
               disabled={isAutoCreating}
             >
               <View style={styles.autoPlaylistContent}>
-                <Sparkles size={24} color={Colors.primary} style={styles.autoPlaylistIcon} />
+                <Ionicons name="sparkles-outline" size={24} color={Colors.primary} style={styles.autoPlaylistIcon} />
                 <View style={styles.autoPlaylistTextContainer}>
                   <Text style={styles.autoPlaylistTitle}>Create Auto Playlist</Text>
                   <Text style={styles.autoPlaylistDescription}>
@@ -902,7 +902,7 @@ export default function CreatePlaylistScreen() {
               {isAutoCreating ? (
                 <ActivityIndicator size="small" color={Colors.primary} />
               ) : (
-                <Plus size={20} color={Colors.primary} />
+                <Ionicons name="add" size={20} color={Colors.primary} />
               )}
             </TouchableOpacity>
           )}
@@ -916,7 +916,7 @@ export default function CreatePlaylistScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Playlist Name</Text>
             <View style={styles.inputWrapper}>
-              <Music size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="musical-notes-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Enter playlist name"
@@ -936,14 +936,14 @@ export default function CreatePlaylistScreen() {
                     style={styles.descriptionControl} 
                     onPress={handleConfirmDescription}
                   >
-                    <Check size={18} color={Colors.primary} />
+                    <Ionicons name="checkmark-outline" size={18} color={Colors.primary} />
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity 
                     style={styles.descriptionControl} 
                     onPress={handleEditDescription}
                   >
-                    <Edit size={18} color={Colors.textSecondary} />
+                    <Ionicons name="pencil-outline" size={18} color={Colors.textSecondary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -963,7 +963,7 @@ export default function CreatePlaylistScreen() {
           <View style={styles.togglesContainer}>
             <View style={styles.toggleItem}>
               <View style={styles.toggleTextContainer}>
-                <MapPin size={18} color={Colors.primary} style={styles.toggleIcon} />
+                <Ionicons name="location-outline" size={18} color={Colors.primary} style={styles.toggleIcon} />
                 <Text style={styles.toggleText}>Include location music</Text>
               </View>
               <Switch
@@ -976,7 +976,7 @@ export default function CreatePlaylistScreen() {
             
             <View style={styles.toggleItem}>
               <View style={styles.toggleTextContainer}>
-                <Sparkles size={18} color={Colors.primary} style={styles.toggleIcon} />
+                <Ionicons name="sparkles-outline" size={18} color={Colors.primary} style={styles.toggleIcon} />
                 <Text style={styles.toggleText}>Include AI recommendations</Text>
               </View>
               <View style={styles.aiToggleContainer}>
@@ -986,7 +986,7 @@ export default function CreatePlaylistScreen() {
                     onPress={handleRegenerateAiRecommendations}
                     disabled={isLoadingAiTracks}
                   >
-                    <RefreshCw size={16} color={isLoadingAiTracks ? Colors.divider : Colors.textSecondary} />
+                    <Ionicons name="refresh-outline" size={16} color={isLoadingAiTracks ? Colors.divider : Colors.textSecondary} />
                   </TouchableOpacity>
                 )}
                 <Switch
@@ -1002,7 +1002,7 @@ export default function CreatePlaylistScreen() {
           <View style={styles.searchContainer}>
             <Text style={styles.inputLabel}>Add Tracks</Text>
             <View style={styles.searchInputWrapper}>
-              <Search size={20} color={Colors.textSecondary} style={styles.inputIcon} />
+              <Ionicons name="search-outline" size={20} color={Colors.textSecondary} style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Search for tracks"
