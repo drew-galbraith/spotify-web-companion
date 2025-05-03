@@ -1,51 +1,61 @@
+
+// hooks/use-spotify-profile.ts
 import { useState, useEffect } from "react";
+import { Alert } from "react-native";
 import { useAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
-import { Alert } from "react-native";
+import { supabase } from "../hooks/supabase";
+
+type ProfileData = {
+  id: string;
+  displayName: string;
+  email: string;
+  imageUrl: string;
+  playlists: number;
+  tracks: number;
+  trips: number;
+};
 
 export function useSpotifyProfile() {
-  const { token } = useAuth();
+  const { spotifyToken: token, isLoading: authLoading } = useAuth();
   const { fetchFromSpotify } = useSpotifyApi();
-  const [data, setData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [data, setData] = useState<ProfileData | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!token) return;
-      
       setIsLoading(true);
       setError(null);
-      
+
       try {
-        // Fetch user profile from Spotify API
-        const userProfile = await fetchFromSpotify("/me");
-        
-        // Fetch user's playlists to get count
-        const userPlaylists = await fetchFromSpotify("/me/playlists?limit=1");
-        
-        // Transform Spotify API data to match our app's format
-        const profileData = {
+        // Parallel fetch: Spotify profile, playlists count, tracks count, and Supabase trips count
+        const [userProfile, userPlaylists, userTracks, tripsRes] = await Promise.all([
+          fetchFromSpotify("/me"),
+          fetchFromSpotify("/me/playlists?limit=1"),
+          fetchFromSpotify("/me/tracks?limit=1"),
+          supabase
+            .from("trips")
+            .select("id", { count: "exact", head: true })
+        ]);
+
+        const profileData: ProfileData = {
           id: userProfile.id,
           displayName: userProfile.display_name,
           email: userProfile.email,
-          imageUrl: userProfile.images?.[0]?.url || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8dXNlcnxlbnwwfHwwfHx8MA%3D%3D",
-          followers: userProfile.followers?.total || 0,
-          // Add travel-specific data
-          trips: 3, // Mock data since we don't have a real trips API
-          playlists: userPlaylists.total || 0,
-          tracks: 127, // Mock data since getting exact track count would require multiple API calls
+          imageUrl: userProfile.images?.[0]?.url ?? "",
+          playlists: userPlaylists.total ?? 0,
+          tracks: userTracks.total ?? 0,
+          trips: tripsRes.count ?? 0,
         };
-        
+
         setData(profileData);
-      } catch (err) {
-        console.error("Profile fetch error:", err);
-        setError(err instanceof Error ? err : new Error("Failed to fetch profile"));
-        
-        // Show error to user
+      } catch (err: any) {
+        console.error("Error loading Spotify profile:", err);
+        setError(err);
         Alert.alert(
           "Error Loading Profile",
-          "There was a problem loading your Spotify profile. Please try again later.",
+          "There was a problem loading your profile. Please try again later.",
           [{ text: "OK" }]
         );
       } finally {
@@ -53,8 +63,13 @@ export function useSpotifyProfile() {
       }
     };
 
-    fetchData();
-  }, [token]);
+    if (!authLoading && token) {
+      fetchData();
+    } else if (!authLoading && !token) {
+      setIsLoading(false);
+      setError(new Error("Not authenticated"));
+    }
+  }, [authLoading, token]);
 
   return { data, isLoading, error };
 }

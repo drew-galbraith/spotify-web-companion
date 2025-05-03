@@ -3,7 +3,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import Colors from "../../constants/colors";
-import { useSpotifyStats } from "../../hooks/use-spotify-stats";
+import { useEffect, useState } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
@@ -12,11 +12,159 @@ import TopItemsList from "../../components/top-items-list";
 import GenreDistribution from "../../components/genre-distribution";
 import { usePlayerStore } from "../../store/player-store";
 import { useRouter } from "expo-router";
+import { useAuth } from "../../context/auth-context";
+import { 
+  SpotifyStats, 
+  SpotifyUser, 
+  SpotifyTopArtistsResponse, 
+  SpotifyTopTracksResponse,
+  SpotifyArtist,
+  SpotifyTrack
+} from "../../types/spotify-api-types";
 
-export default function StatsScreen() {
-  const { data, isLoading, error } = useSpotifyStats();
+export default function IndexScreen() {
+  const [data, setData] = useState<SpotifyStats | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+  
+  const { user, spotifyToken } = useAuth();
   const { currentTrack, isPlaying } = usePlayerStore();
   const router = useRouter();
+
+  // Fetch data from Spotify API
+  useEffect(() => {
+    async function fetchSpotifyData() {
+      if (!spotifyToken) return;
+      
+      setIsLoading(true);
+      setError(null);
+      
+      try {
+        console.log("Starting Spotify API fetch with token:", spotifyToken.substring(0, 10) + "...");
+        
+        // Fetch user profile
+        console.log("Fetching user profile...");
+        const userResponse = await fetch('https://api.spotify.com/v1/me', {
+          headers: { Authorization: `Bearer ${spotifyToken}` },
+        });
+        
+        if (!userResponse.ok) {
+          console.error("User profile fetch failed:", await userResponse.text());
+          throw new Error('Failed to fetch user profile');
+        }
+        const userData = await userResponse.json();
+        console.log("User profile fetched successfully");
+        
+        // Fetch top artists
+        console.log("Fetching top artists...");
+        const topArtistsResponse = await fetch(
+          'https://api.spotify.com/v1/me/top/artists?time_range=short_term&limit=10', 
+          { headers: { Authorization: `Bearer ${spotifyToken}` } }
+        );
+        
+        if (!topArtistsResponse.ok) {
+          console.error("Top artists fetch failed:", await topArtistsResponse.text());
+          throw new Error('Failed to fetch top artists');
+        }
+        const topArtistsData = await topArtistsResponse.json();
+        console.log("Top artists fetched successfully, count:", topArtistsData.items.length);
+        
+        // Fetch top tracks
+        console.log("Fetching top tracks...");
+        const topTracksResponse = await fetch(
+          'https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10',
+          { headers: { Authorization: `Bearer ${spotifyToken}` } }
+        );
+        
+        if (!topTracksResponse.ok) {
+          console.error("Top tracks fetch failed:", await topTracksResponse.text());
+          throw new Error('Failed to fetch top tracks');
+        }
+        const topTracksData = await topTracksResponse.json();
+        console.log("Top tracks fetched successfully, count:", topTracksData.items.length);
+        
+        // Process genre data from top artists
+        const allGenres = topArtistsData.items.flatMap((artist: SpotifyArtist) => artist.genres);
+        const genreCounts = allGenres.reduce((acc: Record<string, number>, genre: string) => {
+          acc[genre] = (acc[genre] || 0) + 1;
+          return acc;
+        }, {});
+        
+        const totalGenres = allGenres.length;
+        const genreDistribution = Object.entries(genreCounts)
+          .map(([name, count]) => ({
+            name,
+            count: count as number,
+            percentage: Math.round(((count as number) / totalGenres) * 100)
+          }))
+          .sort((a, b) => b.count - a.count)
+          .slice(0, 10);
+        
+        // For statistics, we'll use some approximations since actual listening time
+        // requires more complex API calls
+        const tracksCount = topTracksData.items.length;
+        const uniqueArtistsCount = new Set(
+          topTracksData.items.flatMap(track => track.artists.map(artist => artist.id))
+        ).size;
+        
+        // Estimate listening time (assuming average track is ~3 minutes)
+        const estimatedListeningTime = tracksCount * 3;
+        
+        // Compile all the data
+        const statsData: SpotifyStats = {
+          user: {
+            displayName: userData.display_name
+          },
+          topArtists: {
+            shortTerm: topArtistsData.items.map((artist: SpotifyArtist) => ({
+              id: artist.id,
+              name: artist.name,
+              imageUrl: artist.images[0]?.url || '',
+              popularity: artist.popularity
+            }))
+          },
+          topTracks: {
+            shortTerm: topTracksData.items.map((track: SpotifyTrack) => ({
+              id: track.id,
+              name: track.name,
+              artists: track.artists.map((artist: SpotifyArtist) => artist.name),
+              albumImageUrl: track.album.images[0]?.url || '',
+              popularity: track.popularity
+            }))
+          },
+          genres: {
+            shortTerm: genreDistribution
+          },
+          stats: {
+            shortTerm: {
+              listeningTime: estimatedListeningTime,
+              tracksCount: tracksCount,
+              uniqueArtistsCount: uniqueArtistsCount
+            }
+          }
+        };
+        
+        console.log("Stats data compiled:", {
+          artistsCount: statsData.topArtists?.shortTerm.length,
+          tracksCount: statsData.topTracks?.shortTerm.length,
+          firstTrack: statsData.topTracks?.shortTerm[0]
+        });
+        
+        setData(statsData);
+        
+        // Optionally, store this data in Firebase for later use
+        // This would require implementing the Firebase storage logic
+        
+      } catch (err) {
+        console.error("Error fetching Spotify data:", err);
+        setError(err instanceof Error ? err : new Error("Failed to fetch statistics"));
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    
+    fetchSpotifyData();
+  }, [spotifyToken]);
 
   if (isLoading) {
     return <LoadingScreen />;
@@ -114,7 +262,19 @@ export default function StatsScreen() {
 
           <TopItemsList 
             title="Top Tracks" 
-            items={topTracks} 
+            items={topTracks.map((track: {
+              id: string;
+              name: string;
+              artists: string[];
+              albumImageUrl: string;
+              popularity: number;
+            }) => ({
+              id: track.id,
+              name: track.name,
+              artist: track.artists.join(', '), // Convert array to string
+              imageUrl: track.albumImageUrl,
+              popularity: track.popularity
+            }))} 
             type="track"
           />
 

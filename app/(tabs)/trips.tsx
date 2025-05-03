@@ -1,22 +1,23 @@
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, Alert } from "react-native";
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import Colors from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import { useTripStore } from "../../store/trip-store";
 import { LinearGradient } from "expo-linear-gradient";
 import { usePlayerStore } from "../../store/player-store";
 import { useTripDeletion } from "../../hooks/use-trip-deletion";
 import { useState } from "react";
+import { useTrips } from "../../hooks/use-trips";
+import type { Trip } from "../../store/trip-store";
 
 export default function TripsScreen() {
   const router = useRouter();
-  const trips = useTripStore((state) => state.trips);
   const { currentTrack, isPlaying } = usePlayerStore();
   const { confirmAndDeleteTrip, isDeleting } = useTripDeletion();
   const [deletingTripId, setDeletingTripId] = useState<string | null>(null);
+  const { data: trips, isLoading, error } = useTrips();
 
   const handleCreateTrip = () => {
     router.push("/create-trip");
@@ -32,15 +33,18 @@ export default function TripsScreen() {
     }
   };
 
-  const handleDeleteTrip = (id: string, name: string, e: any) => {
+  const handleDeleteTrip = (id: string, e: any) => {
     // Stop event propagation to prevent navigation
     e.stopPropagation();
     
     setDeletingTripId(id);
-    confirmAndDeleteTrip(id, name);
+    // Use destination as fallback if name is not available
+    const tripToDelete = trips?.find(trip => trip.id === id);
+    const tripName = tripToDelete?.name || tripToDelete?.destination || "Trip";
+    confirmAndDeleteTrip(id, tripName);
   };
 
-  const renderTripItem = ({ item }: { item: any }) => {
+  const renderTripItem = ({ item }: { item: Trip }) => {
     return (
       <TouchableOpacity 
         style={styles.tripCard} 
@@ -79,7 +83,7 @@ export default function TripsScreen() {
         {/* Delete button */}
         <TouchableOpacity 
           style={styles.deleteButton}
-          onPress={(e) => handleDeleteTrip(item.id, item.name || item.destination, e)}
+          onPress={(e) => handleDeleteTrip(item.id, e)}
           disabled={isDeleting}
         >
           <Ionicons name="trash-outline" size={18} color={Colors.text} />
@@ -93,6 +97,41 @@ export default function TripsScreen() {
       </TouchableOpacity>
     );
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Your Trips</Text>
+          </View>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <StatusBar style="light" />
+        <SafeAreaView style={styles.safeArea} edges={["top"]}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Your Trips</Text>
+          </View>
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>Error loading trips: {error.message}</Text>
+            <TouchableOpacity style={styles.emptyButton} onPress={() => router.replace("/(tabs)/trips")}>
+              <Text style={styles.emptyButtonText}>Try Again</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -127,7 +166,7 @@ export default function TripsScreen() {
           </TouchableOpacity>
         )}
 
-        {trips.length > 0 ? (
+        {trips && trips.length > 0 ? (
           <FlatList
             data={trips}
             keyExtractor={(item) => item.id}
@@ -322,5 +361,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.text,
     fontWeight: "500",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
 });

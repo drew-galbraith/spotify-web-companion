@@ -11,6 +11,10 @@ import { useSpotifyApi } from "../hooks/use-spotify-api";
 import { useSpotifySearch } from "../hooks/use-spotify-search";
 import { useAutoPlaylist } from "../hooks/use-auto-playlist";
 import { useOpenAI } from "../hooks/use-openai";
+import { useAuth } from "../context/auth-context";
+import { addPlaylist } from "../lib/firestore-service";
+import { doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 export default function CreatePlaylistScreen() {
   const router = useRouter();
@@ -19,6 +23,7 @@ export default function CreatePlaylistScreen() {
   const { results, isLoading: isSearchLoading, search, searchLocationMusic, findLocalArtists } = useSpotifySearch();
   const { createAutoPlaylist, isCreating: isAutoCreating, currentStep, progress } = useAutoPlaylist();
   const { generatePlaylistRecommendations, generateLocalArtists, isLoading: isGeneratingRecommendations } = useOpenAI();
+  const { spotifyToken, user } = useAuth();
   
   const getTripById = useTripStore((state) => state.getTripById);
   const addPlaylistToTrip = useTripStore((state) => state.addPlaylistToTrip);
@@ -49,7 +54,6 @@ export default function CreatePlaylistScreen() {
       setTrip(tripData);
       
       if (tripData) {
-        // Set default playlist name based on trip destination
         const defaultName = tripData.name ? 
           `${tripData.name} - ${tripData.destination.split(',')[0]} Playlist` : 
           `${tripData.destination.split(',')[0]} Vibes`;
@@ -57,24 +61,18 @@ export default function CreatePlaylistScreen() {
         setPlaylistName(defaultName);
         setDescription(`Music for my trip to ${tripData.destination}`);
         
-        // Set country code if available in trip data
         if (tripData.countryCode) {
           setCountryCode(tripData.countryCode);
         } else {
-          // Try to get country code from destination
           getCountryCode(tripData.destination);
         }
         
-        // Load AI artists for this location
         loadAiArtists(tripData.destination);
-        
-        // Load location-based tracks
         loadLocationTracks(tripData.destination, tripData.countryCode);
       }
     }
   }, [tripId, getTripById]);
 
-  // Update local creation status when auto playlist creation is in progress
   useEffect(() => {
     if (isAutoCreating) {
       setCreationStatus(currentStep);
@@ -82,102 +80,15 @@ export default function CreatePlaylistScreen() {
     }
   }, [isAutoCreating, currentStep, progress]);
 
-  const loadAiArtists = async (destination: string) => {
-    setIsFetchingAiArtists(true);
-    setCreationStatus("Finding local artists with AI...");
-    setCreationProgress(10);
-    
-    try {
-      const artists = await generateLocalArtists(destination, countryCode, 5);
-      console.log(`Generated ${artists.length} AI artists for ${destination}`);
-      setAiArtists(artists);
-      
-      // If we found artists, use them to enhance our location tracks
-      if (artists.length > 0) {
-        // This will happen in parallel with the regular location tracks loading
-        loadTracksFromAiArtists(artists);
-      }
-    } catch (error) {
-      console.error("Error loading AI artists:", error);
-    } finally {
-      setIsFetchingAiArtists(false);
-    }
-  };
-
-  const loadTracksFromAiArtists = async (artists: any[]) => {
-    if (!artists.length) return;
-    
-    setCreationStatus("Finding tracks from local artists...");
-    setCreationProgress(20);
-    
-    try {
-      let aiTracks: any[] = [];
-      
-      // For each AI artist, try to find them on Spotify and get their tracks
-      for (const aiArtist of artists.slice(0, 5)) {
-        try {
-          // Search for this artist on Spotify
-          const searchResponse = await safeSpotifyCall(
-            () => fetchFromSpotify(`/v1/search?q=${encodeURIComponent(aiArtist.name)}&type=artist&limit=1`),
-            { artists: { items: [] } }
-          );
-          
-          // If we found a match on Spotify
-          if (searchResponse.artists.items.length > 0) {
-            const spotifyArtist = searchResponse.artists.items[0];
-            
-            // Get top tracks for this artist
-            const topTracksResponse = await safeSpotifyCall(
-              () => fetchFromSpotify(`/v1/artists/${spotifyArtist.id}/top-tracks?market=${countryCode || 'US'}`),
-              { tracks: [] }
-            );
-            
-            if (topTracksResponse.tracks && topTracksResponse.tracks.length > 0) {
-              // Format the tracks
-              const artistTracks = topTracksResponse.tracks.slice(0, 3).map((track: any) => ({
-                id: track.id,
-                name: track.name,
-                type: "track",
-                artist: track.artists.map((a: any) => a.name).join(", "),
-                artists: track.artists.map((a: any) => a.name),
-                albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
-                uri: track.uri,
-                preview_url: track.preview_url,
-                aiArtistId: spotifyArtist.id,
-                aiArtistName: aiArtist.name,
-                aiDescription: aiArtist.description,
-                aiFamousLevel: aiArtist.famousLevel
-              }));
-              
-              aiTracks = [...aiTracks, ...artistTracks];
-              console.log(`Added ${artistTracks.length} tracks from AI artist ${aiArtist.name}`);
-            }
-          }
-        } catch (err) {
-          console.log(`Error getting tracks for AI artist ${aiArtist.name}:`, err);
-        }
-      }
-      
-      if (aiTracks.length > 0) {
-        console.log(`Found ${aiTracks.length} tracks from AI artists`);
-        // Add these tracks to our location tracks
-        setLocationTracks(prevTracks => {
-          // Combine with existing tracks, removing duplicates
-          const allTracks = [...prevTracks, ...aiTracks];
-          return Array.from(
-            new Map(allTracks.map(track => [track.id, track])).values()
-          );
-        });
-      }
-    } catch (error) {
-      console.error("Error loading tracks from AI artists:", error);
-    }
-  };
-
   const getCountryCode = async (destination: string) => {
     try {
       const locationParts = destination.split(',');
       const country = locationParts.length > 1 ? locationParts[locationParts.length - 1].trim() : locationParts[0].trim();
+      
+      if (country.toLowerCase() === 'gibraltar') {
+        setCountryCode('GI');
+        return 'GI';
+      }
       
       const response = await fetch(
         `https://restcountries.com/v3.1/name/${encodeURIComponent(country)}?fields=cca2`
@@ -203,40 +114,31 @@ export default function CreatePlaylistScreen() {
     setCreationProgress(30);
     
     try {
-      // Extract location parts
       const locationParts = destination.split(',');
       const city = locationParts[0].trim();
       const country = locationParts.length > 1 ? locationParts[locationParts.length - 1].trim() : city;
-      
-      // Use existing country code or get a new one
       let countryCode = existingCountryCode || await getCountryCode(destination) || "US";
-      
-      // Get tracks from multiple sources
       const tracks: any[] = [];
       
-      // 1. Search for tracks related to the destination
       await searchLocationMusic(destination);
       
-      // 2. Get tracks from featured playlists in the country
       setCreationStatus("Finding featured playlists in your destination...");
       setCreationProgress(40);
       
       try {
-        // Try country-specific featured playlists first
-        try {
-          const featuredPlaylists = await safeSpotifyCall(
-            () => fetchFromSpotify(`/v1/browse/featured-playlists?country=${countryCode}&limit=2`),
-            { playlists: { items: [] } }
+        const featuredPlaylists = await safeSpotifyCall(
+          () => fetchFromSpotify(`browse/featured-playlists?country=${countryCode}&limit=2`),
+          { playlists: { items: [] } }
+        );
+        
+        if (featuredPlaylists?.playlists?.items?.length > 0) {
+          const playlistId = featuredPlaylists.playlists.items[0].id;
+          const playlistTracks = await safeSpotifyCall(
+            () => fetchFromSpotify(`playlists/${playlistId}/tracks?limit=15`),
+            { items: [] }
           );
           
-          if (featuredPlaylists.playlists.items.length > 0) {
-            // Get tracks from the first featured playlist
-            const playlistId = featuredPlaylists.playlists.items[0].id;
-            const playlistTracks = await safeSpotifyCall(
-              () => fetchFromSpotify(`/v1/playlists/${playlistId}/tracks?limit=15`),
-              { items: [] }
-            );
-            
+          if (playlistTracks?.items) {
             const playlistItems = playlistTracks.items
               .filter((item: any) => item.track)
               .map((item: any) => {
@@ -256,25 +158,27 @@ export default function CreatePlaylistScreen() {
             tracks.push(...playlistItems);
             console.log(`Got ${playlistItems.length} tracks from featured playlist in ${countryCode}`);
           }
-        } catch (err) {
-          console.log(`Error getting featured playlists for country ${countryCode}:`, err);
+        } else {
+          console.log(`No featured playlists found for country ${countryCode}`);
         }
+      } catch (err) {
+        console.log(`Error getting featured playlists for country ${countryCode}:`, err);
+      }
+      
+      try {
+        const globalFeaturedPlaylists = await safeSpotifyCall(
+          () => fetchFromSpotify(`browse/featured-playlists?limit=2`),
+          { playlists: { items: [] } }
+        );
         
-        // If country-specific featured playlists failed, try global ones
-        if (tracks.length < 10) {
-          const globalFeaturedPlaylists = await safeSpotifyCall(
-            () => fetchFromSpotify(`/v1/browse/featured-playlists?limit=2`),
-            { playlists: { items: [] } }
+        if (globalFeaturedPlaylists?.playlists?.items?.length > 0) {
+          const playlistId = globalFeaturedPlaylists.playlists.items[0].id;
+          const playlistTracks = await safeSpotifyCall(
+            () => fetchFromSpotify(`playlists/${playlistId}/tracks?limit=15`),
+            { items: [] }
           );
           
-          if (globalFeaturedPlaylists.playlists.items.length > 0) {
-            // Get tracks from the first featured playlist
-            const playlistId = globalFeaturedPlaylists.playlists.items[0].id;
-            const playlistTracks = await safeSpotifyCall(
-              () => fetchFromSpotify(`/v1/playlists/${playlistId}/tracks?limit=15`),
-              { items: [] }
-            );
-            
+          if (playlistTracks?.items) {
             const playlistItems = playlistTracks.items
               .filter((item: any) => item.track)
               .map((item: any) => {
@@ -296,50 +200,49 @@ export default function CreatePlaylistScreen() {
           }
         }
       } catch (err) {
-        console.log("Error getting tracks from featured playlists:", err);
+        console.log("Error getting tracks from global featured playlists:", err);
       }
       
-      // 3. Get tracks from new releases in the country
       setCreationStatus("Finding new releases in your destination...");
       setCreationProgress(50);
       
       try {
         const newReleases = await safeSpotifyCall(
-          () => fetchFromSpotify(`/v1/browse/new-releases?country=${countryCode}&limit=3`),
+          () => fetchFromSpotify(`browse/new-releases?country=${countryCode}&limit=3`),
           { albums: { items: [] } }
         );
         
-        if (newReleases.albums.items.length > 0) {
-          // Get tracks from the first few albums
+        if (newReleases?.albums?.items?.length > 0) {
           for (let i = 0; i < Math.min(2, newReleases.albums.items.length); i++) {
             const albumId = newReleases.albums.items[i].id;
             const albumTracks = await safeSpotifyCall(
-              () => fetchFromSpotify(`/v1/albums/${albumId}/tracks?limit=5`),
+              () => fetchFromSpotify(`albums/${albumId}/tracks?limit=5`),
               { items: [] }
             );
             
-            // Need to get full track details for each track
-            for (const track of albumTracks.items.slice(0, 5)) {
-              try {
-                const trackDetails = await safeSpotifyCall(
-                  () => fetchFromSpotify(`/v1/tracks/${track.id}`),
-                  null
-                );
-                
-                if (trackDetails) {
-                  tracks.push({
-                    id: trackDetails.id,
-                    name: trackDetails.name,
-                    type: "track",
-                    artist: trackDetails.artists.map((a: any) => a.name).join(", "),
-                    artists: trackDetails.artists.map((a: any) => a.name),
-                    albumImageUrl: trackDetails.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
-                    uri: trackDetails.uri,
-                    preview_url: track.preview_url
-                  });
+            if (albumTracks?.items) {
+              for (const track of albumTracks.items.slice(0, 5)) {
+                try {
+                  const trackDetails = await safeSpotifyCall(
+                    () => fetchFromSpotify(`tracks/${track.id}`),
+                    null
+                  );
+                  
+                  if (trackDetails) {
+                    tracks.push({
+                      id: trackDetails.id,
+                      name: trackDetails.name,
+                      type: "track",
+                      artist: trackDetails.artists.map((a: any) => a.name).join(", "),
+                      artists: trackDetails.artists.map((a: any) => a.name),
+                      albumImageUrl: trackDetails.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
+                      uri: trackDetails.uri,
+                      preview_url: track.preview_url
+                    });
+                  }
+                } catch (err) {
+                  console.log(`Error getting details for track ${track.id}:`, err);
                 }
-              } catch (err) {
-                console.log(`Error getting details for track ${track.id}:`, err);
               }
             }
           }
@@ -349,36 +252,35 @@ export default function CreatePlaylistScreen() {
         console.log("Error getting tracks from new releases:", err);
       }
       
-      // 4. Get tracks from local artists
       setCreationStatus("Finding local artists for your destination...");
       setCreationProgress(60);
       
       try {
-        // Find local artists
         const localArtists = await findLocalArtists(destination, countryCode);
         console.log(`Found ${localArtists.length} local artists for ${destination}`);
         
-        // Get top tracks from each local artist
         for (const artist of localArtists.slice(0, 3)) {
           try {
             const artistTopTracks = await safeSpotifyCall(
-              () => fetchFromSpotify(`/v1/artists/${artist.id}/top-tracks?market=${countryCode}`),
+              () => fetchFromSpotify(`artists/${artist.id}/top-tracks?market=${countryCode}`),
               { tracks: [] }
             );
             
-            const artistTracks = artistTopTracks.tracks.slice(0, 3).map((track: any) => ({
-              id: track.id,
-              name: track.name,
-              type: "track",
-              artist: track.artists.map((a: any) => a.name).join(", "),
-              artists: track.artists.map((a: any) => a.name),
-              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
-              uri: track.uri,
-              preview_url: track.preview_url
-            }));
-            
-            tracks.push(...artistTracks);
-            console.log(`Got ${artistTracks.length} tracks from artist ${artist.name}`);
+            if (artistTopTracks?.tracks?.length > 0) {
+              const artistTracks = artistTopTracks.tracks.slice(0, 3).map((track: any) => ({
+                id: track.id,
+                name: track.name,
+                type: "track",
+                artist: track.artists.map((a: any) => a.name).join(", "),
+                artists: track.artists.map((a: any) => a.name),
+                albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
+                uri: track.uri,
+                preview_url: track.preview_url
+              }));
+              
+              tracks.push(...artistTracks);
+              console.log(`Got ${artistTracks.length} tracks from artist ${artist.name}`);
+            }
           } catch (err) {
             console.log(`Error getting top tracks for artist ${artist.name}:`, err);
           }
@@ -387,20 +289,18 @@ export default function CreatePlaylistScreen() {
         console.log("Error getting tracks from local artists:", err);
       }
       
-      // 5. Get recommendations based on the tracks we've found
       setCreationStatus("Getting personalized recommendations...");
       setCreationProgress(70);
-      
+
       try {
-        // Use some of the tracks we've found as seeds
         const seedTracks = tracks
           .slice(0, 5)
           .map(track => track.id)
           .filter(Boolean);
         
         if (seedTracks.length > 0) {
-          // Limit to 2 seed tracks to avoid exceeding the 5 seed limit
-          const recommendationsUrl = `/v1/recommendations?limit=20&seed_tracks=${seedTracks.slice(0, 2).join(',')}`;
+          console.log("Seed tracks for recommendations:", seedTracks);
+          const recommendationsUrl = `recommendations?limit=20&seed_tracks=${seedTracks.slice(0, 2).join(',')}&market=${countryCode || 'US'}`;
           
           try {
             const recommendations = await safeSpotifyCall(
@@ -408,29 +308,56 @@ export default function CreatePlaylistScreen() {
               { tracks: [] }
             );
             
-            const recommendationTracks = recommendations.tracks.map((track: any) => ({
-              id: track.id,
-              name: track.name,
-              type: "track",
-              artist: track.artists.map((a: any) => a.name).join(", "),
-              artists: track.artists.map((a: any) => a.name),
-              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
-              uri: track.uri,
-              preview_url: track.preview_url
-            }));
-            
-            tracks.push(...recommendationTracks);
-            console.log(`Got ${recommendationTracks.length} tracks from recommendations`);
+            if (recommendations?.tracks?.length > 0) {
+              const recommendationTracks = recommendations.tracks.map((track: any) => ({
+                id: track.id,
+                name: track.name,
+                type: "track",
+                artist: track.artists.map((a: any) => a.name).join(", "),
+                artists: track.artists.map((a: any) => a.name),
+                albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
+                uri: track.uri,
+                preview_url: track.preview_url
+              }));
+              
+              tracks.push(...recommendationTracks);
+              console.log(`Got ${recommendationTracks.length} tracks from recommendations`);
+            } else {
+              console.log("No recommendations returned from Spotify");
+            }
           } catch (err) {
             console.log("Error getting recommendations:", err);
-            console.warn("Recommendations API returned 404, returning empty results");
+            const fallbackUrl = `recommendations?limit=20&seed_tracks=${seedTracks.slice(0, 2).join(',')}`;
+            try {
+              const fallbackRecommendations = await safeSpotifyCall(
+                () => fetchFromSpotify(fallbackUrl),
+                { tracks: [] }
+              );
+              if (fallbackRecommendations?.tracks?.length > 0) {
+                const recommendationTracks = fallbackRecommendations.tracks.map((track: any) => ({
+                  id: track.id,
+                  name: track.name,
+                  type: "track",
+                  artist: track.artists.map((a: any) => a.name).join(", "),
+                  artists: track.artists.map((a: any) => a.name),
+                  albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
+                  uri: track.uri,
+                  preview_url: track.preview_url
+                }));
+                tracks.push(...recommendationTracks);
+                console.log(`Got ${recommendationTracks.length} tracks from fallback recommendations`);
+              }
+            } catch (fallbackErr) {
+              console.log("Error getting fallback recommendations:", fallbackErr);
+            }
           }
+        } else {
+          console.log("No seed tracks available for recommendations");
         }
       } catch (err) {
-        console.log("Error getting recommendations:", err);
+        console.log("Error in recommendations section:", err);
       }
       
-      // Remove duplicates
       const uniqueTracks = Array.from(
         new Map(tracks.map((track: any) => [track.id, track])).values()
       );
@@ -438,7 +365,6 @@ export default function CreatePlaylistScreen() {
       console.log(`Total unique location tracks: ${uniqueTracks.length}`);
       setLocationTracks(uniqueTracks);
       
-      // Generate AI recommendations if we have a trip description
       if (trip && trip.description) {
         generateAiRecommendations();
       }
@@ -451,6 +377,89 @@ export default function CreatePlaylistScreen() {
     }
   };
 
+  const loadAiArtists = async (destination: string) => {
+    setIsFetchingAiArtists(true);
+    setCreationStatus("Finding local artists with AI...");
+    setCreationProgress(10);
+    
+    try {
+      const artists = await generateLocalArtists(destination, countryCode, 5);
+      console.log(`Generated ${artists.length} AI artists for ${destination}`);
+      setAiArtists(artists);
+      
+      if (artists.length > 0) {
+        loadTracksFromAiArtists(artists);
+      }
+    } catch (error) {
+      console.error("Error loading AI artists:", error);
+    } finally {
+      setIsFetchingAiArtists(false);
+    }
+  };
+
+  const loadTracksFromAiArtists = async (artists: any[]) => {
+    if (!artists.length) return;
+    
+    setCreationStatus("Finding tracks from local artists...");
+    setCreationProgress(20);
+    
+    try {
+      let aiTracks: any[] = [];
+      
+      for (const aiArtist of artists.slice(0, 5)) {
+        try {
+          const searchResponse = await safeSpotifyCall(
+            () => fetchFromSpotify(`search?q=${encodeURIComponent(aiArtist.name)}&type=artist&limit=1`),
+            { artists: { items: [] } }
+          );
+          
+          if (searchResponse?.artists?.items?.length > 0) {
+            const spotifyArtist = searchResponse.artists.items[0];
+            
+            const topTracksResponse = await safeSpotifyCall(
+              () => fetchFromSpotify(`artists/${spotifyArtist.id}/top-tracks?market=${countryCode || 'US'}`),
+              { tracks: [] }
+            );
+            
+            if (topTracksResponse?.tracks?.length > 0) {
+              const artistTracks = topTracksResponse.tracks.slice(0, 3).map((track: any) => ({
+                id: track.id,
+                name: track.name,
+                type: "track",
+                artist: track.artists.map((a: any) => a.name).join(", "),
+                artists: track.artists.map((a: any) => a.name),
+                albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
+                uri: track.uri,
+                preview_url: track.preview_url,
+                aiArtistId: spotifyArtist.id,
+                aiArtistName: aiArtist.name,
+                aiDescription: aiArtist.description,
+                aiFamousLevel: aiArtist.famousLevel
+              }));
+              
+              aiTracks = [...aiTracks, ...artistTracks];
+              console.log(`Added ${artistTracks.length} tracks from AI artist ${aiArtist.name}`);
+            }
+          }
+        } catch (err) {
+          console.log(`Error getting tracks for AI artist ${aiArtist.name}:`, err);
+        }
+      }
+      
+      if (aiTracks.length > 0) {
+        console.log(`Found ${aiTracks.length} tracks from AI artists`);
+        setLocationTracks(prevTracks => {
+          const allTracks = [...prevTracks, ...aiTracks];
+          return Array.from(
+            new Map(allTracks.map(track => [track.id, track])).values()
+          );
+        });
+      }
+    } catch (error) {
+      console.error("Error loading tracks from AI artists:", error);
+    }
+  };
+
   const generateAiRecommendations = async () => {
     if (!trip) return;
     
@@ -459,7 +468,6 @@ export default function CreatePlaylistScreen() {
     setCreationProgress(80);
     
     try {
-      // Get AI-recommended track names
       const trackNames = await generatePlaylistRecommendations(
         trip.name || `Trip to ${trip.destination.split(',')[0]}`,
         trip.destination,
@@ -471,16 +479,15 @@ export default function CreatePlaylistScreen() {
       setCreationStatus("Finding recommended tracks on Spotify...");
       setCreationProgress(90);
       
-      // Search for these tracks on Spotify
       const tracks: any[] = [];
       for (const trackName of trackNames) {
         try {
           const searchResponse = await safeSpotifyCall(
-            () => fetchFromSpotify(`/v1/search?q=${encodeURIComponent(trackName)}&type=track&limit=1`),
+            () => fetchFromSpotify(`search?q=${encodeURIComponent(trackName)}&type=track&limit=1`),
             { tracks: { items: [] } }
           );
           
-          if (searchResponse.tracks.items.length > 0) {
+          if (searchResponse?.tracks?.items?.length > 0) {
             const track = searchResponse.tracks.items[0];
             tracks.push({
               id: track.id,
@@ -488,7 +495,7 @@ export default function CreatePlaylistScreen() {
               type: "track",
               artist: track.artists.map((a: any) => a.name).join(", "),
               artists: track.artists.map((a: any) => a.name),
-              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
+              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsbnVtfGVufDB8fDB8fHww",
               uri: track.uri,
               preview_url: track.preview_url,
               isAiRecommended: true
@@ -557,223 +564,146 @@ export default function CreatePlaylistScreen() {
       Alert.alert("Missing Information", "Please enter a playlist name");
       return;
     }
-    
-    if (selectedTracks.length === 0 && !useLocationBased && !useAiRecommendations) {
-      Alert.alert("No Tracks Selected", "Please select at least one track for your playlist or enable location-based or AI recommendations");
+    if (
+      selectedTracks.length === 0 &&
+      !useLocationBased &&
+      !useAiRecommendations
+    ) {
+      Alert.alert(
+        "No Tracks Selected",
+        "Select at least one track or enable location/AI recommendations"
+      );
       return;
     }
-    
+    if (!spotifyToken) {
+      Alert.alert("Authentication Error", "Please log in to Spotify first");
+      return;
+    }
+    if (!tripId) {
+      Alert.alert("Error", "Invalid trip ID");
+      return;
+    }
+
     setIsCreating(true);
     setCreationStatus("Creating your playlist...");
     setCreationProgress(10);
-    
+
     try {
-      // 1. Create a new playlist on Spotify
-      setCreationStatus("Creating playlist on Spotify...");
-      setCreationProgress(20);
-      
-      const newPlaylist = await fetchFromSpotify("/v1/me/playlists", {
-        method: "POST",
-        body: JSON.stringify({
-          name: playlistName,
-          description: description,
-          public: false
-        })
-      });
-      
-      let trackUris: string[] = [];
-      
-      // If using AI recommendations, include those tracks first
-      if (useAiRecommendations && aiRecommendedTracks.length > 0) {
-        setCreationStatus("Adding AI recommended tracks...");
-        setCreationProgress(40);
-        
-        const aiTrackUris = aiRecommendedTracks
-          .filter(track => track.uri)
-          .map(track => track.uri);
-        
-        trackUris = [...aiTrackUris];
+      const meResponse = await fetchFromSpotify("/v1/me");
+      const userId = meResponse.id;
+
+      const newPlaylist = await fetchFromSpotify(
+        `/v1/users/${userId}/playlists`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            name: playlistName,
+            description,
+            public: false,
+          }),
+        }
+      );
+      setCreationProgress(30);
+
+      if (!newPlaylist?.id) {
+        throw new Error("Failed to create Spotify playlist: No playlist ID returned");
       }
-      
-      // If using location-based recommendations, include those tracks
+
+      let trackUris = selectedTracks.map((t) => t.uri);
       if (useLocationBased) {
-        setCreationStatus("Adding location-based tracks...");
-        setCreationProgress(60);
-        
-        // Add location tracks
-        const locationTrackUris = locationTracks
-          .filter(track => track.uri)
-          .map(track => track.uri);
-        
-        trackUris = [...trackUris, ...locationTrackUris];
-        
-        // If we don't have enough tracks, try to get more recommendations
-        if (trackUris.length < 20) {
-          setCreationStatus("Getting additional recommendations...");
-          setCreationProgress(70);
-          
-          try {
-            // Get user's top tracks for personalization
-            const userTopTracks = await safeSpotifyCall(
-              () => fetchFromSpotify("/v1/me/top/tracks?limit=5"),
-              { items: [] }
-            );
-            
-            const topTrackIds = userTopTracks.items
-              .slice(0, 2)
-              .map((track: any) => track.id);
-            
-            // Get user's top artists for personalization
-            const userTopArtists = await safeSpotifyCall(
-              () => fetchFromSpotify("/v1/me/top/artists?limit=5"),
-              { items: [] }
-            );
-            
-            const topArtistIds = userTopArtists.items
-              .slice(0, 3)
-              .map((artist: any) => artist.id);
-            
-            // Build recommendations request
-            let recommendationsUrl = `/v1/recommendations?limit=20`;
-            
-            if (topTrackIds.length > 0) {
-              recommendationsUrl += `&seed_tracks=${topTrackIds.join(',')}`;
-            }
-            
-            if (topArtistIds.length > 0 && topTrackIds.length < 2) {
-              // Only add artist seeds if we have room (5 seed limit total)
-              const availableArtistSlots = 5 - topTrackIds.length;
-              recommendationsUrl += `&seed_artists=${topArtistIds.slice(0, availableArtistSlots).join(',')}`;
-            }
-            
-            try {
-              const recommendations = await safeSpotifyCall(
-                () => fetchFromSpotify(recommendationsUrl),
-                { tracks: [] }
-              );
-              
-              // Add recommendation URIs
-              const recommendationUris = recommendations.tracks
-                .filter((track: any) => track.uri)
-                .map((track: any) => track.uri);
-              
-              trackUris = [...trackUris, ...recommendationUris];
-            } catch (err) {
-              console.log("Error getting additional recommendations:", err);
-              console.warn("Recommendations API returned 404, returning empty results");
-            }
-          } catch (err) {
-            console.log("Error getting additional recommendations:", err);
-          }
-        }
+        trackUris = trackUris.concat(locationTracks.map((t) => t.uri));
       }
-      
-      // Add manually selected tracks
-      setCreationStatus("Adding your selected tracks...");
-      setCreationProgress(80);
-      
-      const manualTrackUris = selectedTracks
-        .filter(track => track.uri)
-        .map(track => track.uri);
-      
-      // Combine all tracks, prioritizing manual selections
-      trackUris = [
-        ...manualTrackUris,
-        ...trackUris.filter(uri => !manualTrackUris.includes(uri))
-      ];
-      
-      // Remove duplicates
-      trackUris = [...new Set(trackUris)];
-      
-      // Limit to 50 tracks (Spotify API limit for a single request)
-      trackUris = trackUris.slice(0, 50);
-      
-      console.log(`Adding ${trackUris.length} tracks to playlist ${newPlaylist.id}`);
-      
-      // 2. Add tracks to the playlist
-      setCreationStatus("Adding tracks to your playlist...");
-      setCreationProgress(90);
-      
+      if (useAiRecommendations) {
+        trackUris = trackUris.concat(aiRecommendedTracks.map((t) => t.uri));
+      }
+      trackUris = Array.from(new Set(trackUris)).slice(0, 50);
+
       if (trackUris.length > 0) {
-        // Split track URIs into chunks of 50 (Spotify API limit)
-        const chunks = [];
-        for (let i = 0; i < trackUris.length; i += 50) {
-          chunks.push(trackUris.slice(i, i + 50));
-        }
-        
-        // Add each chunk of tracks
-        for (const chunk of chunks) {
-          await fetchFromSpotify(`/v1/playlists/${newPlaylist.id}/tracks`, {
+        setCreationStatus("Adding tracks to your playlist...");
+        setCreationProgress(60);
+        await fetchFromSpotify(
+          `/v1/playlists/${newPlaylist.id}/tracks`,
+          {
             method: "POST",
-            body: JSON.stringify({
-              uris: chunk
-            })
-          });
-          
-          // Add a small delay between chunks
-          if (chunks.length > 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            body: JSON.stringify({ uris: trackUris }),
           }
-        }
-      }
-      
-      // 3. Add the playlist to the trip in our local store
-      setCreationStatus("Finalizing your playlist...");
-      setCreationProgress(95);
-      
-      addPlaylistToTrip(tripId, {
-        id: newPlaylist.id,
-        name: newPlaylist.name,
-        imageUrl: newPlaylist.images[0]?.url || trip.imageUrl,
-        trackCount: trackUris.length,
-        location: trip.destination
-      });
-      
-      setCreationStatus("Playlist created successfully!");
-      setCreationProgress(100);
-      
-      // 4. Navigate to the playlist screen
-      setTimeout(() => {
-        Alert.alert(
-          "Playlist Created",
-          `Your playlist "${playlistName}" has been created with ${trackUris.length} tracks!`,
-          [
-            { 
-              text: "View Playlist", 
-              onPress: () => router.push(`/playlist/${newPlaylist.id}`) 
-            },
-            { 
-              text: "Back to Trip", 
-              onPress: () => router.push(`/trip/${tripId}`) 
-            },
-          ]
         );
-      }, 500);
-    } catch (error) {
+      }
+
+      // Update local store
+      addPlaylistToTrip(tripId, newPlaylist.id);
+
+      // Update Firestore with transaction
+      const tripRef = doc(db, "trips", tripId);
+      await runTransaction(db, async (transaction) => {
+        const tripDoc = await transaction.get(tripRef);
+        if (!tripDoc.exists()) {
+          throw new Error("Trip document does not exist!");
+        }
+        const currentPlaylists = tripDoc.data().playlists || [];
+        transaction.update(tripRef, {
+          playlists: [...new Set([...currentPlaylists, newPlaylist.id])],
+          updatedAt: new Date().toISOString(),
+        });
+        console.log("Successfully updated Firestore with playlist ID:", newPlaylist.id);
+      });
+
+      setCreationProgress(100);
+      Alert.alert(
+        "Playlist Created!",
+        `“${playlistName}” now has ${trackUris.length} tracks.`,
+        [
+          {
+            text: "View Playlist",
+            onPress: () => router.push(`/playlist/${newPlaylist.id}`),
+          },
+          {
+            text: "Back to Trip",
+            onPress: () => router.push(`/trip/${tripId}`),
+          },
+        ]
+      );
+    } catch (error: any) {
       console.error("Error creating playlist:", error);
-      setCreationStatus("Error creating playlist");
-      Alert.alert("Error", "Failed to create playlist. Please try again.");
+      const message = error.message || "Something went wrong.";
+      Alert.alert("Error", message);
     } finally {
-      setTimeout(() => {
-        setIsCreating(false);
-        setCreationStatus("");
-        setCreationProgress(0);
-      }, 1000);
+      setIsCreating(false);
+      setCreationStatus("");
+      setCreationProgress(0);
     }
   };
-
+  
   const handleCreateAutoPlaylist = async () => {
     if (!trip) return;
     
     try {
       const result = await createAutoPlaylist(
-        tripId,
+        tripId!,
         trip.destination,
         trip.description,
         trip.name
       );
       
       if (result) {
+        // Update local store
+        addPlaylistToTrip(tripId!, result.id);
+
+        // Update Firestore with transaction
+        const tripRef = doc(db, "trips", tripId!);
+        await runTransaction(db, async (transaction) => {
+          const tripDoc = await transaction.get(tripRef);
+          if (!tripDoc.exists()) {
+            throw new Error("Trip document does not exist!");
+          }
+          const currentPlaylists = tripDoc.data().playlists || [];
+          transaction.update(tripRef, {
+            playlists: [...new Set([...currentPlaylists, result.id])],
+            updatedAt: new Date().toISOString(),
+          });
+          console.log("Successfully updated Firestore with auto playlist ID:", result.id);
+        });
+
         Alert.alert(
           "Auto Playlist Created",
           `Your playlist "${result.name}" has been created with ${result.trackCount} tracks!`,
@@ -849,25 +779,18 @@ export default function CreatePlaylistScreen() {
     );
   }
 
-  // Combine search results with location tracks and AI recommendations for display
   let displayTracks: any[] = [];
   
   if (searchQuery.length > 2) {
-    // If searching, show search results
     displayTracks = results.filter(item => item.type === 'track');
   } else if (useAiRecommendations && aiRecommendedTracks.length > 0) {
-    // If AI recommendations are enabled and available, show them first
     displayTracks = [...aiRecommendedTracks];
-    
-    // If location-based is also enabled, add those tracks
     if (useLocationBased) {
-      // Add location tracks that aren't already in AI recommendations
       const aiTrackIds = new Set(aiRecommendedTracks.map(track => track.id));
       const filteredLocationTracks = locationTracks.filter(track => !aiTrackIds.has(track.id));
       displayTracks = [...displayTracks, ...filteredLocationTracks];
     }
   } else {
-    // Otherwise show location tracks
     displayTracks = locationTracks;
   }
 
@@ -1067,7 +990,6 @@ export default function CreatePlaylistScreen() {
         </View>
       </SafeAreaView>
 
-      {/* Creation Status Modal */}
       {(isCreating || isAutoCreating) && (creationStatus || currentStep) && (
         <Modal
           transparent={true}
@@ -1291,7 +1213,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(100, 65, 165, 0.1)",
   },
   aiRecommendedTrackItem: {
-    backgroundColor: "rgba(255, 165, 0, 0.1)", // Orange tint for AI recommendations
+    backgroundColor: "rgba(255, 165, 0, 0.1)",
   },
   trackImage: {
     width: 50,
@@ -1313,12 +1235,12 @@ const styles = StyleSheet.create({
   },
   aiArtistLabel: {
     fontSize: 12,
-    color: "#9370DB", // Light purple for AI artists
+    color: "#9370DB",
     marginTop: 2,
   },
   aiRecommendedLabel: {
     fontSize: 12,
-    color: "#FFA500", // Orange for AI recommendations
+    color: "#FFA500",
     marginTop: 2,
   },
   selectIndicator: {

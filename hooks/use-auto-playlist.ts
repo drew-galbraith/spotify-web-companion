@@ -91,7 +91,7 @@ export function useAutoPlaylist() {
   const [progress, setProgress] = useState<number>(0);
   const { fetchFromSpotify, safeSpotifyCall } = useSpotifyApi();
   const { addPlaylistToTrip } = useTripStore();
-  const { token } = useAuth();
+  const { spotifyToken: token } = useAuth();
 
   // Function to get AI-generated artists for a location
   const getAIArtistsForLocation = async (location: string): Promise<string[]> => {
@@ -151,7 +151,7 @@ export function useAutoPlaylist() {
           artists = Array.isArray(parsedResponse) ? parsedResponse : [];
         } catch (e) {
           // If parsing fails, try to extract the array from the text
-          const match = data.completion.match(/\[.*\]/s);
+          const match = data.completion.match(/\[([\s\S]*?)\]/);
           if (match) {
             try {
               artists = JSON.parse(match[0]);
@@ -263,7 +263,7 @@ export function useAutoPlaylist() {
     ]);
     
     // Filter out null results
-    const validArtists = results.filter((artist): artist is Artist => artist !== null);
+    const validArtists = results.filter((artist) => artist !== null) as Artist[];
     
     console.log(`Found ${validArtists.length} detailed artists from Spotify`);
     setProgress(40);

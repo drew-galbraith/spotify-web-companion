@@ -125,7 +125,7 @@ export function useOpenAI() {
           }
         } catch (e) {
           // If parsing fails, try to extract the array from the text
-          const match = data.completion.match(/\[.*\]/s);
+          const match = data.completion.match(/\[[\s\S]*\]/);
           if (match) {
             try {
               const parsedArray = JSON.parse(match[0]);
@@ -229,7 +229,7 @@ export function useOpenAI() {
           }
         } catch (e) {
           // If parsing fails, try to extract the array from the text
-          const match = data.completion.match(/\[.*\]/s);
+          const match = data.completion.match(/\[[\s\S]*\]/);
           if (match) {
             try {
               return JSON.parse(match[0]);

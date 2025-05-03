@@ -4,7 +4,7 @@ import { useSpotifyApi } from "./use-spotify-api";
 import { Alert } from "react-native";
 
 export function useSpotifyPlaylist(id: string | undefined) {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const spotifyApi = useSpotifyApi();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -20,7 +20,7 @@ export function useSpotifyPlaylist(id: string | undefined) {
   }, [id]);
 
   const fetchData = useCallback(async () => {
-    if (!token || !playlistIdRef.current || !spotifyApi.fetchFromSpotify) {
+    if (!user || !playlistIdRef.current || !spotifyApi.fetchFromSpotify) {
       setIsLoading(false);
       return;
     }
@@ -138,7 +138,7 @@ export function useSpotifyPlaylist(id: string | undefined) {
     } finally {
       setIsLoading(false);
     }
-  }, [token, spotifyApi.fetchFromSpotify]);
+  }, [user, spotifyApi.fetchFromSpotify]);
 
   useEffect(() => {
     // Only fetch data on initial mount or when playlistId changes

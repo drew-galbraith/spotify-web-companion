@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/auth-context";
 import { mockTravelPlaylists } from "../mocks/travel-data";
+import { getAuth } from 'firebase/auth';
 
 export function useTravelPlaylists() {
-  const { token } = useAuth();
+  const { user } = useAuth(); // Changed from token to user
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -13,7 +14,7 @@ export function useTravelPlaylists() {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!token) {
+      if (!user) {
         setIsLoading(false);
         return;
       }
@@ -44,7 +45,7 @@ export function useTravelPlaylists() {
     };
 
     fetchData();
-  }, [token]);
+  }, [user]); // Changed dependency from token to user
 
   return { data, isLoading, error };
 }

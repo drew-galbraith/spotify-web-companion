@@ -1,13 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../context/auth-context";
-import { useTripStore } from "../store/trip-store";
 import { useSpotifyApi } from "./use-spotify-api";
+import { db } from "../lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
+
+interface TripData {
+  id: string;
+  userId: string;
+  playlists: any[];
+  [key: string]: any;
+}
 
 export function useTrip(id: string | undefined) {
-  const { token } = useAuth();
+  const { user } = useAuth();
   const spotifyApi = useSpotifyApi();
-  const getTripById = useTripStore((state) => state.getTripById);
-  const [data, setData] = useState<any>(null);
+  const [data, setData] = useState<TripData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
@@ -21,7 +28,7 @@ export function useTrip(id: string | undefined) {
   }, [id]);
 
   const loadData = useCallback(async () => {
-    if (!token || !tripIdRef.current || !spotifyApi.fetchFromSpotify) {
+    if (!user || !tripIdRef.current || !spotifyApi.fetchFromSpotify) {
       setIsLoading(false);
       return;
     }
@@ -30,11 +37,21 @@ export function useTrip(id: string | undefined) {
     setError(null);
     
     try {
-      // Get trip from store
-      const trip = getTripById(tripIdRef.current);
+      // Get trip from Firebase
+      const tripDoc = await getDoc(doc(db, "trips", tripIdRef.current));
       
-      if (!trip) {
+      if (!tripDoc.exists()) {
         throw new Error("Trip not found");
+      }
+      
+      const trip: TripData = {
+        id: tripDoc.id,
+        ...tripDoc.data()
+      } as TripData;
+      
+      // Verify this trip belongs to the current user
+      if (trip.userId !== user.id) {
+        throw new Error("Unauthorized access to trip");
       }
       
       // If the trip has playlists, fetch the first few tracks for each playlist
@@ -51,16 +68,14 @@ export function useTrip(id: string | undefined) {
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
               
-              const tracksResponse = await spotifyApi.safeSpotifyCall(
-                () => spotifyApi.fetchFromSpotify(
+              try {
+                const tracksResponse = await spotifyApi.fetchFromSpotify(
                   `/playlists/${playlist.id}/tracks?limit=5`
-                ),
-                { items: [] }
-              );
-              
-              clearTimeout(timeoutId);
-              
-              if (tracksResponse && tracksResponse.items) {
+                );
+                
+                clearTimeout(timeoutId);
+                
+                if (tracksResponse && tracksResponse.items) {
                 const tracks = tracksResponse.items
                   .filter((item: any) => item.track)
                   .map((item: any) => ({
@@ -81,13 +96,17 @@ export function useTrip(id: string | undefined) {
               }
               
               return playlist;
+              } catch (err) {
+                console.error("Error fetching playlist tracks:", err);
+                // Return the playlist without tracks if there's an error
+                clearTimeout(timeoutId);
+                return {
+                  ...playlist,
+                  tracks: []
+                };
+              }
             } catch (err) {
-              console.error("Error fetching playlist tracks:", err);
-              // Return the playlist without tracks if there's an error
-              return {
-                ...playlist,
-                tracks: []
-              };
+              console.error("Error with controller", err);
             }
           })
         );
@@ -105,7 +124,7 @@ export function useTrip(id: string | undefined) {
     } finally {
       setIsLoading(false);
     }
-  }, [token, getTripById, spotifyApi]);
+  }, [user, spotifyApi]);
 
   useEffect(() => {
     // Only load data on initial mount or when tripId changes

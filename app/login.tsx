@@ -1,4 +1,5 @@
 
+// app/login.tsx
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, Alert } from "react-native";
 import { useAuth } from "../context/auth-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -8,14 +9,14 @@ import Colors from "../constants/colors";
 import { useState } from "react";
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { signIn } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     setIsLoading(true);
     try {
-      await login();
-    } catch (error) {
+      await signIn();
+    } catch (error: any) {
       console.error("Login failed:", error);
       Alert.alert(
         "Login Failed",
@@ -89,7 +90,6 @@ export default function LoginScreen() {
           <TouchableOpacity onPress={handleSpotifyDeveloperPortal}>
             <Text style={styles.developerLink}>Spotify Developer Portal</Text>
           </TouchableOpacity>
-
           <TouchableOpacity onPress={handleShowRedirectInfo}>
             <Text style={styles.developerLink}>Redirect URI Help</Text>
           </TouchableOpacity>
@@ -112,74 +112,60 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 100,
+    paddingTop: 50,
   },
   logo: {
     width: 120,
     height: 120,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   title: {
     fontSize: 32,
+    color: Colors.primary,
     fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 8,
-    textAlign: "center",
   },
   subtitle: {
-    fontSize: 18,
-    color: "#fff",
-    opacity: 0.9,
-    textAlign: "center",
+    fontSize: 16,
+    color: Colors.textSecondary,
+    marginTop: 8,
   },
   contentContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    paddingBottom: 80,
+    flex: 2,
     paddingHorizontal: 24,
   },
   featureText: {
     fontSize: 16,
-    color: "#fff",
-    marginBottom: 12,
-    textAlign: "left",
-    alignSelf: "flex-start",
+    color: Colors.text,
+    marginVertical: 4,
   },
   loginButton: {
-    backgroundColor: "#fff",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    borderRadius: 30,
-    width: "100%",
+    backgroundColor: Colors.primary,
+    paddingVertical: 14,
+    borderRadius: 8,
     alignItems: "center",
-    marginTop: 32,
-    marginBottom: 24,
+    marginVertical: 20,
   },
   loginButtonDisabled: {
-    opacity: 0.7,
+    backgroundColor: Colors.secondary,
   },
   loginButtonText: {
-    color: Colors.primary,
+    color: "#fff",
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "600",
   },
   disclaimer: {
-    color: "#ddd",
     fontSize: 12,
+    color: Colors.textSecondary,
     textAlign: "center",
-    paddingHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   linkContainer: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-    marginTop: 8,
+    justifyContent: "space-around",
+    paddingVertical: 10,
   },
   developerLink: {
-    color: "#fff",
-    fontSize: 14,
-    textDecorationLine: "underline",
+    fontSize: 12,
+    color: Colors.text,
   },
 });

@@ -2,9 +2,10 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 import { Alert } from "react-native";
+import { getAuth } from 'firebase/auth';
 
 export function useTravelPlaylist(id: string | undefined) {
-  const { token } = useAuth();
+  const { user } = useAuth(); // Changed from token to user
   const { fetchFromSpotify } = useSpotifyApi();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -12,7 +13,7 @@ export function useTravelPlaylist(id: string | undefined) {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!token || !id) {
+      if (!user || !id) {
         setIsLoading(false);
         return;
       }
@@ -153,7 +154,7 @@ export function useTravelPlaylist(id: string | undefined) {
     };
 
     fetchData();
-  }, [token, id]);
+  }, [user, id]); // Changed dependency from token to user
 
   return { data, isLoading, error };
 }

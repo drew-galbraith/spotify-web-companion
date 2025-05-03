@@ -1,16 +1,23 @@
 import { useState, useCallback } from 'react';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
-import { useTripStore } from '../store/trip-store';
 import { useSpotifyApi } from './use-spotify-api';
+import { db } from '../lib/firebase';
+import { doc, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 
 export function useTripDeletion() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [currentStep, setCurrentStep] = useState('');
   
-  const { deletePlaylist } = useSpotifyApi();
-  const { removeTrip, getPlaylistIdsForTrip, removePlaylistFromTrip } = useTripStore();
+  const { fetchFromSpotify } = useSpotifyApi();
+
+  // Delete a single playlist using Spotify API
+  const deletePlaylist = async (playlistId: string) => {
+    await fetchFromSpotify(`/playlists/${playlistId}/followers`, {
+      method: 'DELETE'
+    });
+  };
 
   // Delete a single playlist
   const deletePlaylistFromTrip = useCallback(async (tripId: string, playlistId: string) => {
@@ -21,8 +28,22 @@ export function useTripDeletion() {
       // Delete from Spotify
       await deletePlaylist(playlistId);
       
-      // Remove from trip store
-      removePlaylistFromTrip(tripId, playlistId);
+      // Get trip data from Firebase
+      const tripRef = doc(db, "trips", tripId);
+      const tripDoc = await getDoc(tripRef);
+      
+      if (tripDoc.exists()) {
+        const tripData = tripDoc.data();
+        const updatedPlaylists = (tripData.playlists || []).filter(
+          (p: any) => p.id !== playlistId
+        );
+        
+        // Update trip in Firebase
+        await updateDoc(tripRef, {
+          playlists: updatedPlaylists,
+          updatedAt: new Date().toISOString()
+        });
+      }
       
       setCurrentStep('Playlist deleted successfully');
       return true;
@@ -33,15 +54,23 @@ export function useTripDeletion() {
       setIsDeleting(false);
       setProgress(0);
     }
-  }, [deletePlaylist, removePlaylistFromTrip]);
+  }, [fetchFromSpotify]);
 
   // Delete entire trip and all its playlists
   const deleteTrip = useCallback(async (tripId: string) => {
     try {
       setIsDeleting(true);
       
-      // Get all playlist IDs for this trip
-      const playlistIds = getPlaylistIdsForTrip(tripId);
+      // Get trip data from Firebase
+      const tripRef = doc(db, "trips", tripId);
+      const tripDoc = await getDoc(tripRef);
+      
+      if (!tripDoc.exists()) {
+        throw new Error("Trip not found");
+      }
+      
+      const tripData = tripDoc.data();
+      const playlistIds = (tripData.playlists || []).map((playlist: any) => playlist.id);
       
       if (playlistIds.length > 0) {
         setCurrentStep(`Deleting ${playlistIds.length} playlists from Spotify...`);
@@ -61,10 +90,10 @@ export function useTripDeletion() {
         }
       }
       
-      // Remove trip from store
+      // Remove trip from Firebase
       setCurrentStep('Removing trip from your collection...');
       setProgress(90);
-      removeTrip(tripId);
+      await deleteDoc(tripRef);
       
       setCurrentStep('Trip deleted successfully');
       setProgress(100);
@@ -79,7 +108,7 @@ export function useTripDeletion() {
     } finally {
       setIsDeleting(false);
     }
-  }, [getPlaylistIdsForTrip, deletePlaylist, removeTrip]);
+  }, [fetchFromSpotify]);
 
   // Confirm and delete trip
   const confirmAndDeleteTrip = useCallback((tripId: string, tripName: string) => {

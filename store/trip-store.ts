@@ -11,14 +11,7 @@ export interface Trip {
   dates: string;
   description: string;
   imageUrl: string;
-  playlistCount: number;
-  playlists: {
-    id: string;
-    name: string;
-    imageUrl: string;
-    trackCount: number;
-    location?: string;
-  }[];
+  playlists: string[]; // Changed to array of playlist IDs
   createdAt: number;
   countryCode?: string;
   name?: string; // Optional trip name
@@ -26,14 +19,13 @@ export interface Trip {
 
 interface TripState {
   trips: Trip[];
-  addTrip: (trip: Omit<Trip, "id" | "playlistCount" | "playlists" | "createdAt">) => string;
+  addTrip: (trip: Omit<Trip, "id" | "playlists" | "createdAt">) => string;
   removeTrip: (id: string) => void;
-  addPlaylistToTrip: (tripId: string, playlist: { id: string; name: string; imageUrl: string; trackCount: number; location?: string }) => void;
+  addPlaylistToTrip: (tripId: string, playlistId: string) => void; // Updated to accept only playlistId
   removePlaylistFromTrip: (tripId: string, playlistId: string) => void;
   getTripById: (id: string) => Trip | undefined;
   updateTripDescription: (tripId: string, description: string) => void;
-  // New function to get all playlist IDs for a trip
-  getPlaylistIdsForTrip: (tripId: string) => string[];
+  // Removed getPlaylistIdsForTrip as it's redundant with playlists being IDs
 }
 
 export const useTripStore = create<TripState>()(
@@ -46,7 +38,6 @@ export const useTripStore = create<TripState>()(
         const newTrip: Trip = {
           id,
           ...tripData,
-          playlistCount: 0,
           playlists: [],
           createdAt: Date.now(),
         };
@@ -64,19 +55,16 @@ export const useTripStore = create<TripState>()(
         }));
       },
       
-      addPlaylistToTrip: (tripId, playlist) => {
+      addPlaylistToTrip: (tripId, playlistId) => {
         set((state) => ({
           trips: state.trips.map((trip) => {
             if (trip.id === tripId) {
-              const existingPlaylist = trip.playlists.find(p => p.id === playlist.id);
-              if (existingPlaylist) {
-                return trip; // Playlist already exists
+              if (trip.playlists.includes(playlistId)) {
+                return trip; // Playlist ID already exists
               }
-              
               return {
                 ...trip,
-                playlistCount: trip.playlistCount + 1,
-                playlists: [...trip.playlists, playlist],
+                playlists: [...trip.playlists, playlistId],
               };
             }
             return trip;
@@ -90,8 +78,7 @@ export const useTripStore = create<TripState>()(
             if (trip.id === tripId) {
               return {
                 ...trip,
-                playlistCount: Math.max(0, trip.playlistCount - 1),
-                playlists: trip.playlists.filter((p) => p.id !== playlistId),
+                playlists: trip.playlists.filter((id) => id !== playlistId),
               };
             }
             return trip;
@@ -115,13 +102,6 @@ export const useTripStore = create<TripState>()(
             return trip;
           }),
         }));
-      },
-
-      // New function to get all playlist IDs for a trip
-      getPlaylistIdsForTrip: (tripId) => {
-        const trip = get().trips.find((trip) => trip.id === tripId);
-        if (!trip) return [];
-        return trip.playlists.map(playlist => playlist.id);
       },
     }),
     {

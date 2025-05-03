@@ -7,13 +7,15 @@ import Colors from "../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import * as ImagePicker from "expo-image-picker";
-import { useTripStore } from "../store/trip-store";
 import { useOpenAI } from "../hooks/use-openai";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import { db } from "../lib/firebase";
+import { collection, addDoc } from "firebase/firestore";
+import { useAuth } from "../context/auth-context";
 
 export default function CreateTripScreen() {
   const router = useRouter();
-  const addTrip = useTripStore((state) => state.addTrip);
+  const { user } = useAuth();
   const { generateTripDescription, isLoading: isGeneratingDescription } = useOpenAI();
   
   const [destination, setDestination] = useState("");
@@ -327,7 +329,7 @@ export default function CreateTripScreen() {
   };
 
   const handleCreateTrip = async () => {
-    if (!validateForm() || isSubmitting) return;
+    if (!validateForm() || isSubmitting || !user?.id) return;
     
     setIsSubmitting(true);
     
@@ -346,19 +348,26 @@ export default function CreateTripScreen() {
       // Use trip name if provided, otherwise use destination
       const finalTripName = tripName.trim() || `Trip to ${destination.split(',')[0]}`;
       
-      // Add trip to store with country code
-      const tripId = addTrip({
+      // Create trip object
+      const tripData = {
         destination,
         location: location || destination, // Use destination as fallback
         dates,
         description: description || `Trip to ${destination}`, // Use default description if empty
         imageUrl,
         countryCode: countryCode || undefined,
-        name: finalTripName
-      });
+        name: finalTripName,
+        userId: user.id, // Add user ID for Firebase queries
+        playlists: [], // Initialize with empty playlists array
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       
-      // Navigate directly to the trip screen
-      router.replace(`/trip/${tripId}`);
+      // Add trip to Firebase
+      const docRef = await addDoc(collection(db, "trips"), tripData);
+      
+      // Navigate to the trip screen
+      router.replace(`/trip/${docRef.id}`);
     } catch (error) {
       console.error("Error creating trip:", error);
       Alert.alert("Error", "Failed to create trip. Please try again.");
@@ -818,6 +827,7 @@ const styles = StyleSheet.create({
   },
   descriptionControls: {
     flexDirection: "row",
+    padding: 4,
   },
   descriptionControl: {
     marginLeft: 12,

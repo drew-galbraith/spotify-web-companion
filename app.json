@@ -31,9 +31,13 @@
       ]
     },
     "web": {
+      "bundler": "metro",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      [
+        "expo-auth-session"
+      ],
       [
         "expo-router",
         {
@@ -57,7 +61,9 @@
       },
       "eas": {
         "projectId": "31bda9e7-6f12-442d-8685-783f78c4e7c4"
-      }
+      },
+      "spotifyClientId": "14457edd9cd944a08d5d1bcac2371875",
+      "spotifyRedirectUri": "https://auth.expo.io/@scubadrew0716/wandertunes"
     }
   }
 }

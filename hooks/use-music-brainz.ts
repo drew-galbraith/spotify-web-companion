@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { getAuth } from 'firebase/auth';
 
 // MusicBrainz API base URL
 const MUSICBRAINZ_API_BASE_URL = "https://musicbrainz.org/ws/2";
@@ -6,9 +7,56 @@ const MUSICBRAINZ_API_BASE_URL = "https://musicbrainz.org/ws/2";
 // User agent is required by MusicBrainz API
 const USER_AGENT = "TravelTunes/1.0.0 (https://github.com/yourusername/travel-tunes)";
 
+// Type definitions for MusicBrainz API
+interface MusicBrainzArea {
+  id: string;
+  name: string;
+  "life-span"?: {
+    "begin"?: string;
+    "end"?: string;
+  };
+  country?: string;
+  score?: number;
+}
+
+interface MusicBrainzArtist {
+  id: string;
+  name: string;
+  score: number;
+  type?: string;
+  country?: string;
+  disambiguation?: string;
+}
+
+interface MusicBrainzReleaseGroup {
+  id: string;
+  title: string;
+  "primary-type"?: string;
+  "first-release-date"?: string;
+}
+
+interface MusicBrainzArtistResponse {
+  id: string;
+  name: string;
+  type?: string;
+  country?: string;
+  disambiguation?: string;
+  "release-groups"?: MusicBrainzReleaseGroup[];
+}
+
 export function useMusicBrainz() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+
+  // Get Firebase Auth token if needed for authenticated requests
+  const getFirebaseToken = async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (user) {
+      return await user.getIdToken();
+    }
+    return null;
+  };
 
   // Helper function to make API calls to MusicBrainz
   const fetchFromMusicBrainz = async (endpoint: string, params: Record<string, string> = {}) => {
@@ -49,7 +97,7 @@ export function useMusicBrainz() {
   };
 
   // Search for an area (city, country, etc.)
-  const searchArea = async (location: string) => {
+  const searchArea = async (location: string): Promise<MusicBrainzArea | null> => {
     try {
       // Extract city and country from location string
       const locationParts = location.split(',');
@@ -74,7 +122,7 @@ export function useMusicBrainz() {
   };
 
   // Get artists from a specific area
-  const getArtistsFromArea = async (areaId: string, limit = 50) => {
+  const getArtistsFromArea = async (areaId: string, limit = 50): Promise<MusicBrainzArtist[]> => {
     try {
       const data = await fetchFromMusicBrainz("/artist", { 
         area: areaId,
@@ -111,8 +159,8 @@ export function useMusicBrainz() {
       
       // Filter out artists with low score or no name
       const validArtists = artists
-        .filter(artist => artist.score > 50 && artist.name)
-        .map(artist => ({
+        .filter((artist: MusicBrainzArtist) => artist.score > 50 && artist.name)
+        .map((artist: MusicBrainzArtist) => ({
           id: artist.id,
           name: artist.name,
           type: artist.type || "Person",
@@ -131,7 +179,7 @@ export function useMusicBrainz() {
   // Get releases (albums) by an artist
   const getArtistReleases = async (artistId: string, limit = 10) => {
     try {
-      const data = await fetchFromMusicBrainz(`/artist/${artistId}`, {
+      const data: MusicBrainzArtistResponse | null = await fetchFromMusicBrainz(`/artist/${artistId}`, {
         inc: "release-groups",
         limit: limit.toString()
       });
@@ -141,7 +189,7 @@ export function useMusicBrainz() {
         return [];
       }
       
-      return data["release-groups"].map(release => ({
+      return data["release-groups"].map((release: MusicBrainzReleaseGroup) => ({
         id: release.id,
         title: release.title,
         type: release["primary-type"] || "Unknown",
