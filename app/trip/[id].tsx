@@ -195,6 +195,19 @@ export default function TripScreen() {
         albumImageUrl: firstTrack.albumImageUrl || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww"
       };
       playTrack(trackWithDefaults);
+    } else {
+      // If no tracks are loaded, alert user to view the playlist first
+      Alert.alert(
+        "No Tracks Loaded", 
+        "Please view the playlist details to load tracks before playing.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { 
+            text: "View Playlist", 
+            onPress: () => router.push(`/playlist/${playlist.id}`)
+          }
+        ]
+      );
     }
   };
 

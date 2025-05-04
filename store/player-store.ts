@@ -5,6 +5,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { Audio, AVPlaybackStatus } from "expo-av";
 import * as Linking from "expo-linking";
 
+declare global {
+  interface Window {
+    onSpotifyWebPlaybackSDKReady: () => void;
+    Spotify?: any;
+  }
+}
+
 interface Track {
   id: string;
   name: string;
@@ -78,6 +85,8 @@ interface PlayerState {
   startPlaybackSync: () => void;
   stopPlaybackSync: () => void;
   seekToPosition: (position: number) => Promise<void>;
+  authContext: any;
+  setAuthContext: (context: any) => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -85,6 +94,8 @@ export const usePlayerStore = create<PlayerState>()(
     (set, get) => ({
       currentTrack: null,
       isPlaying: false,
+      authContext: null,
+      setAuthContext: (context: any) => set({ authContext: context }),
       volume: 1.0,
       sound: null,
       isLoading: false,
@@ -182,7 +193,7 @@ export const usePlayerStore = create<PlayerState>()(
             return [];
           }
           
-          const response = await fetch("https://api.spotify.com/v1/me/player/devices", {
+          let response = await fetch("https://api.spotify.com/v1/me/player/devices", {
             method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -190,12 +201,35 @@ export const usePlayerStore = create<PlayerState>()(
             },
           });
           
+          // If unauthorized, try to refresh token
+          if (response.status === 401) {
+            console.log("Token expired, attempting refresh...");
+            try {
+              // Get the refreshSpotifyToken function from context
+              // You'll need to pass this through props or use a global store
+              const auth = usePlayerStore.getState().authContext; // You'll need to add this to store
+              const newToken = await auth.refreshSpotifyToken();
+              
+              // Retry the request with new token
+              response = await fetch("https://api.spotify.com/v1/me/player/devices", {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${newToken}`,
+                  "Content-Type": "application/json",
+                },
+              });
+            } catch (refreshError) {
+              console.error("Token refresh failed:", refreshError);
+              throw new Error("Authentication failed. Please sign in again.");
+            }
+          }
+
           if (!response.ok) {
             throw new Error(`Failed to fetch devices: ${response.status}`);
           }
           
           const data = await response.json();
-          const devices = data.devices || [];
+          const devices: SpotifyDevice[] = data.devices || [];
           
           // Update state with devices
           set({ spotifyDevices: devices });
@@ -278,16 +312,15 @@ export const usePlayerStore = create<PlayerState>()(
             isPlayerVisible: true
           });
           
-          const token = await AsyncStorage.getItem("spotify_token");
+          let token = await AsyncStorage.getItem("spotify_token");
           if (!token) {
             throw new Error("No authentication token available");
           }
           
-          // If we have an active device, use it, otherwise don't specify (Spotify will choose)
           const deviceId = get().activeDevice?.id;
           const deviceQuery = deviceId ? `?device_id=${deviceId}` : "";
           
-          const response = await fetch(`https://api.spotify.com/v1/me/player/play${deviceQuery}`, {
+          let response = await fetch(`https://api.spotify.com/v1/me/player/play${deviceQuery}`, {
             method: "PUT",
             headers: {
               Authorization: `Bearer ${token}`,
@@ -298,14 +331,35 @@ export const usePlayerStore = create<PlayerState>()(
             }),
           });
           
+          // If unauthorized, try to refresh token
+          if (response.status === 401) {
+            console.log("Token expired, attempting refresh...");
+            try {
+              const auth = usePlayerStore.getState().authContext;
+              const newToken = await auth.refreshSpotifyToken();
+              
+              // Retry the request with new token
+              response = await fetch(`https://api.spotify.com/v1/me/player/play${deviceQuery}`, {
+                method: "PUT",
+                headers: {
+                  Authorization: `Bearer ${newToken}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  uris: [track.uri],
+                }),
+              });
+            } catch (refreshError) {
+              console.error("Token refresh failed:", refreshError);
+              throw new Error("Authentication failed. Please sign in again.");
+            }
+          }
+          
           if (!response.ok && response.status !== 204) {
-            // If response is 404, it might mean no active device
             if (response.status === 404) {
-              // Try to fetch devices and activate one
               const devices = await get().fetchSpotifyDevices();
               if (devices.length > 0) {
                 await get().transferPlayback(devices[0].id);
-                // Try playing again
                 return await get().playOnSpotifyConnect(track);
               } else {
                 throw new Error("No active Spotify device found. Open Spotify on another device first.");
@@ -316,7 +370,6 @@ export const usePlayerStore = create<PlayerState>()(
             throw new Error(errorData.error?.message || "Failed to play track");
           }
           
-          // Start syncing playback state
           get().startPlaybackSync();
           
           set({ 
@@ -333,7 +386,6 @@ export const usePlayerStore = create<PlayerState>()(
             isLoading: false
           });
           
-          // Fall back to preview URL if available
           if (track.preview_url) {
             console.log("Falling back to preview URL");
             await get().playTrack(track);
@@ -814,20 +866,17 @@ export const usePlayerStore = create<PlayerState>()(
             if (canOpen) {
               await Linking.openURL(spotifyUrl);
               console.log('Opened track in Spotify app');
-              return true;
             } else {
               // If Spotify app is not installed, open in browser
               const webUrl = `https://open.spotify.com/track/${trackUri.split(':')[2]}`;
               await Linking.openURL(webUrl);
               console.log('Opened track in browser');
-              return true;
             }
           }
-          return false;
+          // No return statement - void function
         } catch (error) {
           console.error('Error opening Spotify:', error);
           set({ error: 'Failed to open Spotify' });
-          return false;
         }
       },
       

@@ -17,6 +17,7 @@ type SpotifyUser = {
   display_name: string;
   email: string;
   images?: Array<{ url: string }>;
+  product?: string;
 };
 
 type AuthContextType = {
@@ -24,8 +25,11 @@ type AuthContextType = {
   user: SpotifyUser | null;
   spotifyToken: string | null;
   isLoading: boolean;
+  isPremium: boolean;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshSpotifyToken: () => Promise<string>;
+  isTokenExpired: () => boolean;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -35,10 +39,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [isPremium, setIsPremium] = useState(false);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
+  const [tokenExpiresAt, setTokenExpiresAt] = useState<number | null>(null);
 
   // Get from constants
   const clientId = Constants.expoConfig?.extra?.spotifyClientId || '14457edd9cd944a08d5d1bcac2371875';
   
+  // Add this helper function to check if token is expired
+  const isTokenExpired = () => {
+    if (!tokenExpiresAt) return false;
+    return Date.now() >= tokenExpiresAt;
+  };
+
+  // Add this token refresh function
+  const refreshSpotifyToken = async () => {
+    try {
+      console.log('Refreshing Spotify token...');
+      const storedRefreshToken = await SecureStore.getItemAsync('spotify_refresh_token');
+      
+      if (!storedRefreshToken) {
+        throw new Error('No refresh token available');
+      }
+
+      const tokenUrl = 'https://accounts.spotify.com/api/token';
+      const params = new URLSearchParams();
+      params.append('grant_type', 'refresh_token');
+      params.append('refresh_token', storedRefreshToken);
+      params.append('client_id', clientId);
+
+      const response = await fetch(tokenUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: params.toString(),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to refresh token');
+      }
+
+      const data = await response.json();
+      
+      // Store the new access token
+      await SecureStore.setItemAsync('spotify_token', data.access_token);
+      setSpotifyToken(data.access_token);
+      
+      // Store the new refresh token if provided
+      if (data.refresh_token) {
+        await SecureStore.setItemAsync('spotify_refresh_token', data.refresh_token);
+        setRefreshToken(data.refresh_token);
+      }
+      
+      // Calculate expiration time
+      const expiresIn = data.expires_in || 3600; // Default to 1 hour
+      const expiresAt = Date.now() + (expiresIn * 1000);
+      await SecureStore.setItemAsync('spotify_token_expires_at', expiresAt.toString());
+      setTokenExpiresAt(expiresAt);
+      
+      console.log('Token refreshed successfully');
+      return data.access_token;
+    } catch (error) {
+      console.error('Error refreshing Spotify token:', error);
+      throw error;
+    }
+  };
+
   // Use the auto-detected redirect URI from Expo
   const redirectUri = AuthSession.makeRedirectUri();
   
@@ -156,6 +223,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       const spotifyUser = await userResponse.json();
       console.log('User profile fetched successfully');
+      console.log('User product:', spotifyUser.product);
+
+      // Check if user is premium
+      const premium = spotifyUser.product === 'premium';
+      setIsPremium(premium);
+
       setUser(spotifyUser);
       
       // Update user record in Firestore
@@ -168,6 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             display_name: spotifyUser.display_name,
             email: spotifyUser.email,
             avatar_url: spotifyUser.images?.[0]?.url ?? null,
+            product: spotifyUser.product,
             last_login: new Date().toISOString(),
           },
           { merge: true }
@@ -251,9 +325,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           console.log('Token exchange successful');
           const accessToken = tokenResult.accessToken;
+          const refreshToken = tokenResult.refreshToken;
           
-          // Store the token securely
+          // Store both tokens
           await SecureStore.setItemAsync('spotify_token', accessToken);
+          if (refreshToken) {
+            await SecureStore.setItemAsync('spotify_refresh_token', refreshToken);
+            setRefreshToken(refreshToken);
+          }
+
+          // Store expiration time
+          const expiresIn = tokenResult.expiresIn || 3600;
+          const expiresAt = Date.now() + (expiresIn * 1000);
+          await SecureStore.setItemAsync('spotify_token_expires_at', expiresAt.toString());
+          setTokenExpiresAt(expiresAt);
+
           setSpotifyToken(accessToken);
           
           // Debug: Check token scopes
@@ -282,12 +368,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [clientId, redirectUri]);
 
+  // Add automatic token refresh check
+  useEffect(() => {
+    const checkTokenExpiration = async () => {
+      if (spotifyToken && tokenExpiresAt) {
+        // Check if token is about to expire (5 minutes before)
+        if (Date.now() >= tokenExpiresAt - 300000) {
+          try {
+            await refreshSpotifyToken();
+          } catch (error) {
+            console.error('Auto token refresh failed:', error);
+            // Optionally force a sign out
+            await signOut();
+          }
+        }
+      }
+    };
+    
+    // Check every minute
+    const intervalId = setInterval(checkTokenExpiration, 60000);
+    
+    return () => clearInterval(intervalId);
+  }, [spotifyToken, tokenExpiresAt]);
+
+
   const signOut = useCallback(async () => {
     setIsLoading(true);
     try {
       console.log('Signing out');
       setUser(null);
       setSpotifyToken(null);
+      setIsPremium(false);
       await SecureStore.deleteItemAsync('spotify_token');
       console.log('Signed out successfully');
     } catch (error) {
@@ -314,8 +425,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         spotifyToken,
         isLoading,
+        isPremium,
         signIn,
         signOut,
+        refreshSpotifyToken,
+        isTokenExpired
       }}
     >
       {children}
@@ -334,8 +448,11 @@ export const useSafeAuth = (): AuthContextType => {
       user: null,
       spotifyToken: null,
       isLoading: true,
+      isPremium: false,
       signIn: async () => { console.warn('signIn called outside AuthProvider'); },
       signOut: async () => { console.warn('signOut called outside AuthProvider'); },
+      refreshSpotifyToken: async () => { console.warn('refreshSpotifyToken called outside AuthProvider'); return ''; },
+      isTokenExpired: () => false,
     };
   }
   

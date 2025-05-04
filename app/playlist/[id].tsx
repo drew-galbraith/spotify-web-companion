@@ -6,7 +6,6 @@ import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import Colors from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
-import { useTravelPlaylist } from "../../hooks/use-travel-playlist";
 import { usePlayerStore } from "../../store/player-store";
 import { useSafeAuth } from "../../context/auth-context";
 import LoadingScreen from "../../components/loading-screen";
@@ -15,12 +14,43 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useState } from "react";
 import TrackListItem from "../../components/track-list-item";
 import PlayerControls from "../../components/player-controls";
+import { useSpotifyApi } from "../../hooks/use-spotify-api";
+import { getDoc, doc } from "firebase/firestore";
+import { db } from "../../lib/firebase";
+
+interface PlaylistTrack {
+  id: string;
+  name: string;
+  artists: string[];
+  albumName?: string;
+  albumImageUrl: string;
+  duration_ms: number;
+  preview_url?: string;
+  uri: string;
+}
+
+interface PlaylistData {
+  id: string;
+  name: string;
+  imageUrl: string;
+  trackCount: number;
+  tracks: PlaylistTrack[];
+  uri: string;
+  location?: string;
+  spotifyId: string;
+}
 
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { isPremium } = useSafeAuth();
-  const { data: playlist, isLoading, error } = useTravelPlaylist(id);
+  const { fetchFromSpotify } = useSpotifyApi();
+  
+  // Add local state for playlist data
+  const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
   const { 
     currentTrack, 
     isPlaying, 
@@ -44,10 +74,82 @@ export default function PlaylistScreen() {
 
   // Ensure the player is visible when viewing a playlist
   useEffect(() => {
-    if (playlist) {
-      usePlayerStore.getState().showPlayer();
+    const fetchPlaylistData = async () => {
+      try {
+        setIsLoading(true);
+        
+        // First, get the playlist document from Firebase
+        const playlistDoc = await getDoc(doc(db, "playlists", id));
+        
+        if (!playlistDoc.exists()) {
+          throw new Error("Playlist not found");
+        }
+        
+        const firebaseData = playlistDoc.data();
+        const spotifyId = firebaseData.spotifyId;
+        
+        if (!spotifyId) {
+          throw new Error("Spotify ID not found for this playlist");
+        }
+        
+        // Fetch data from Spotify
+        const [spotifyPlaylist, tracksData] = await Promise.all([
+          fetchFromSpotify(`/v1/playlists/${spotifyId}?fields=id,name,description,images,uri,tracks.total`),
+          fetchFromSpotify(`/v1/playlists/${spotifyId}/tracks?fields=items(track(id,name,artists,album(name,images),duration_ms,preview_url,uri))`)
+        ]);
+        
+        if (!spotifyPlaylist) {
+          throw new Error("Failed to fetch playlist from Spotify");
+        }
+        
+        // Transform tracks data
+        const tracks: PlaylistTrack[] = tracksData?.items
+          ?.filter((item: any) => item.track && !item.track.is_local)
+          .map((item: any) => {
+            const track = item.track;
+            return {
+              id: track.id,
+              name: track.name,
+              artists: track.artists.map((a: any) => a.name),
+              albumName: track.album.name,
+              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
+              duration_ms: track.duration_ms,
+              preview_url: track.preview_url,
+              uri: track.uri
+            };
+          }) || [];
+        
+        // Combine data
+        const playlistData: PlaylistData = {
+          id: id,
+          name: spotifyPlaylist.name,
+          imageUrl: spotifyPlaylist.images?.[0]?.url || firebaseData.imageUrl,
+          trackCount: spotifyPlaylist.tracks?.total || tracks.length,
+          tracks: tracks,
+          uri: spotifyPlaylist.uri,
+          location: firebaseData.destination || firebaseData.location,
+          spotifyId: spotifyId
+        };
+        
+        setPlaylist(playlistData);
+        
+        // Show player when playlist loads
+        if (playlistData) {
+          usePlayerStore.getState().showPlayer();
+        }
+        
+      } catch (err) {
+        console.error("Error fetching playlist:", err);
+        setError(err instanceof Error ? err.message : "Failed to load playlist");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    if (id) {
+      fetchPlaylistData();
     }
-  }, [playlist]);
+  }, [id]);
 
   // Initialize Web Playback SDK on web platform
   useEffect(() => {

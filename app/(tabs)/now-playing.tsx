@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
@@ -35,17 +35,16 @@ export default function NowPlayingScreen() {
     webPlayerReady,
     webPlayerVisible,
     toggleWebPlayerVisibility,
-    // Initialize Spotify Connect for iOS
     syncPlaybackState
   } = usePlayerStore();
+
+  const [showDevices, setShowDevices] = useState(false);
+  const [deviceError, setDeviceError] = useState<string | null>(null);
 
   // Initialize Spotify Connect for iOS
   useEffect(() => {
     if (Platform.OS === 'ios' && isPremium && currentTrack) {
-      // Fetch available devices
       fetchSpotifyDevices();
-      
-      // Initial sync of playback state
       syncPlaybackState();
     }
   }, [isPremium, currentTrack, fetchSpotifyDevices, syncPlaybackState]);
@@ -71,25 +70,60 @@ export default function NowPlayingScreen() {
     );
   }
 
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      pauseTrack();
-    } else {
-      if (Platform.OS === 'web' && webPlayerReady && isPremium && currentTrack.uri) {
-        if (!webPlayerVisible) {
-          toggleWebPlayerVisibility();
+  const handlePlayPause = async () => {
+    try {
+      if (isPlaying) {
+        pauseTrack();
+        return;
+      }
+
+      // Different logic for premium vs free users
+      if (isPremium && currentTrack.uri) {
+        // Premium users can play any track
+        if (Platform.OS === 'ios') {
+          if (!isSpotifyConnectActive) {
+            toggleSpotifyConnectActive();
+            await fetchSpotifyDevices();
+            
+            if (spotifyDevices.length === 0) {
+              setDeviceError('No Spotify devices found. Please open Spotify on another device.');
+              return;
+            }
+          }
+          resumeTrack();
+        } else if (Platform.OS === 'web') {
+          if (!webPlayerReady) {
+            if (!webPlayerVisible) {
+              toggleWebPlayerVisibility();
+            }
+            setTimeout(() => resumeTrack(), 1000);
+          } else {
+            resumeTrack();
+          }
+        } else if (currentTrack.preview_url) {
+          resumeTrack();
+        } else {
+          handleOpenInSpotify();
         }
-        resumeTrack();
-      } else if (Platform.OS === 'ios' && isPremium && currentTrack.uri) {
-        if (!isSpotifyConnectActive) {
-          toggleSpotifyConnectActive();
-        }
-        resumeTrack();
       } else if (currentTrack.preview_url) {
+        // Free users can only play previews
         resumeTrack();
       } else {
-        handleOpenInSpotify();
+        // No preview available, open in Spotify
+        Alert.alert(
+          isPremium ? 'Full Track Not Available' : 'Premium Required',
+          isPremium ? 
+            'This track cannot be played in the app. Would you like to open it in Spotify?' :
+            'Full track playback requires a Spotify Premium account. You can play the preview or open in Spotify.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Spotify', onPress: handleOpenInSpotify }
+          ]
+        );
       }
+    } catch (error) {
+      console.error('Error playing track:', error);
+      Alert.alert('Playback Error', 'Unable to play this track. Please try again.');
     }
   };
 
@@ -115,14 +149,12 @@ export default function NowPlayingScreen() {
     seekToPosition(value);
   };
 
-  // Format time in mm:ss
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Determine if the track is playable
   const hasPreview = !!currentTrack.preview_url;
   const hasUri = !!currentTrack.uri;
   const isPlayable = Platform.OS === 'web' ? 
@@ -146,6 +178,55 @@ export default function NowPlayingScreen() {
               </TouchableOpacity>
             )}
           </View>
+
+          {Platform.OS === 'ios' && isPremium && (
+            <View style={styles.deviceSelection}>
+              <TouchableOpacity 
+                style={styles.deviceSelector}
+                onPress={() => setShowDevices(!showDevices)}
+              >
+                {isSpotifyConnectActive && activeDevice ? (
+                  <Text style={styles.deviceText}>
+                    Playing on: {activeDevice.name}
+                  </Text>
+                ) : (
+                  <Text style={styles.deviceText}>Select Device</Text>
+                )}
+                <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
+              </TouchableOpacity>
+              
+              {showDevices && (
+                <View style={styles.devicesList}>
+                  {spotifyDevices.map(device => (
+                    <TouchableOpacity
+                      key={device.id}
+                      style={[
+                        styles.deviceItem,
+                        device.is_active && styles.activeDevice
+                      ]}
+                      onPress={() => {
+                        usePlayerStore.getState().transferPlayback(device.id);
+                        setShowDevices(false);
+                      }}
+                    >
+                      <Text style={styles.deviceItemText}>{device.name}</Text>
+                      <Text style={styles.deviceType}>{device.type}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  
+                  {spotifyDevices.length === 0 && (
+                    <Text style={styles.noDevicesText}>
+                      No devices found. Open Spotify on another device.
+                    </Text>
+                  )}
+                </View>
+              )}
+              
+              {deviceError && (
+                <Text style={styles.errorText}>{deviceError}</Text>
+              )}
+            </View>
+          )}
 
           <View style={styles.albumContainer}>
             <Image 
@@ -194,12 +275,14 @@ export default function NowPlayingScreen() {
             <TouchableOpacity 
               style={[
                 styles.playButton,
-                !isPlayable && styles.disabledButton
+                (!isPlayable && !currentTrack.uri) && styles.disabledButton
               ]} 
               onPress={handlePlayPause}
-              disabled={!isPlayable && !hasUri}
+              disabled={isLoading}
             >
-              {isPlaying ? (
+              {isLoading ? (
+                <ActivityIndicator size="small" color={Colors.text} />
+              ) : isPlaying ? (
                 <Ionicons name="pause" size={32} color={Colors.text} />
               ) : (
                 <Ionicons name="play" size={32} color={Colors.text} />
@@ -236,20 +319,15 @@ export default function NowPlayingScreen() {
             </TouchableOpacity>
           </View>
 
-          {Platform.OS === 'ios' && isSpotifyConnectActive && activeDevice && (
-            <View style={styles.deviceContainer}>
-              <Text style={styles.deviceText}>
-                Playing on: {activeDevice.name}
+          {!isPremium && (
+            <View style={styles.premiumNotice}>
+              <Ionicons name="star" size={16} color={Colors.accent} style={styles.premiumIcon} />
+              <Text style={styles.premiumText}>
+                {currentTrack.preview_url ? 
+                  'Playing 30s preview - Premium required for full tracks' :
+                  'Premium required for full track playback'
+                }
               </Text>
-              <TouchableOpacity 
-                style={styles.deviceButton}
-                onPress={() => {
-                  fetchSpotifyDevices();
-                  // Show device selection UI here
-                }}
-              >
-                <Text style={styles.deviceButtonText}>Change</Text>
-              </TouchableOpacity>
             </View>
           )}
 
@@ -449,5 +527,68 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontSize: 16,
     fontWeight: '500',
+  },
+  deviceSelection: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+  },
+  deviceSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.cardBackground,
+    padding: 12,
+    borderRadius: 8,
+  },
+  devicesList: {
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 8,
+    marginTop: 8,
+    padding: 8,
+  },
+  deviceItem: {
+    padding: 12,
+    borderRadius: 6,
+    marginBottom: 4,
+  },
+  activeDevice: {
+    backgroundColor: Colors.primary + '30',
+  },
+  deviceItemText: {
+    color: Colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  deviceType: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  noDevicesText: {
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    padding: 12,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: 12,
+    marginTop: 8,
+  },
+  premiumNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    padding: 8,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 8,
+    marginHorizontal: 20,
+  },
+  premiumIcon: {
+    marginRight: 8,
+  },
+  premiumText: {
+    color: Colors.textSecondary,
+    fontSize: 14,
   },
 });

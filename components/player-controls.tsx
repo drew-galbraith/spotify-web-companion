@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Text, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Platform, ActivityIndicator, Alert } from 'react-native';
 import Colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '../store/player-store';
@@ -12,14 +12,13 @@ interface PlayerControlsProps {
 }
 
 export default function PlayerControls({ compact = false, showProgress = false }: PlayerControlsProps) {
-  const { isPremium, isAuthenticated } = useSafeAuth();
+  const { isPremium } = useSafeAuth();
   const { 
     currentTrack, 
     isPlaying, 
     isLoading,
     playbackPosition,
     playbackDuration,
-    playTrack, 
     pauseTrack, 
     resumeTrack,
     openInSpotify,
@@ -31,30 +30,77 @@ export default function PlayerControls({ compact = false, showProgress = false }
     fetchSpotifyDevices,
     webPlayerReady,
     webPlayerVisible,
-    toggleWebPlayerVisibility
+    toggleWebPlayerVisibility,
+    activeDevice,
+    spotifyDevices
   } = usePlayerStore();
 
   if (!currentTrack) return null;
 
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      pauseTrack();
-    } else {
-      if (Platform.OS === 'web' && webPlayerReady && isPremium && currentTrack.uri) {
-        if (!webPlayerVisible) {
-          toggleWebPlayerVisibility();
-        }
-        resumeTrack();
-      } else if (Platform.OS === 'ios' && isPremium && currentTrack.uri) {
-        if (!isSpotifyConnectActive) {
-          toggleSpotifyConnectActive();
-        }
-        resumeTrack();
-      } else if (currentTrack.preview_url) {
-        resumeTrack();
-      } else {
-        handleOpenInSpotify();
+  const handlePlayPause = async () => {
+    try {
+      if (isPlaying) {
+        await pauseTrack();
+        return;
       }
+
+      // Different logic for premium vs free users
+      if (isPremium && currentTrack.uri) {
+        if (Platform.OS === 'ios') {
+          // Initialize Spotify Connect if not active
+          if (!isSpotifyConnectActive) {
+            toggleSpotifyConnectActive();
+            
+            // Check if we have any devices available
+            await fetchSpotifyDevices();
+            
+            if (spotifyDevices.length === 0) {
+              Alert.alert(
+                'No Devices Found',
+                'Please open Spotify on another device first.',
+                [{ text: 'OK' }]
+              );
+              return;
+            }
+          }
+          await resumeTrack();
+        } else if (Platform.OS === 'web') {
+          // Initialize Web Playback SDK if not ready
+          if (!webPlayerReady) {
+            if (!webPlayerVisible) {
+              toggleWebPlayerVisibility();
+            }
+            // Add a small delay for initialization
+            setTimeout(() => resumeTrack(), 1000);
+          } else {
+            await resumeTrack();
+          }
+        } else if (currentTrack.preview_url) {
+          // Fallback to preview for other platforms
+          await resumeTrack();
+        } else {
+          // If all else fails, open in Spotify
+          handleOpenInSpotify();
+        }
+      } else if (currentTrack.preview_url) {
+        // Free users can only play previews
+        await resumeTrack();
+      } else {
+        // No preview available, open in Spotify
+        Alert.alert(
+          isPremium ? 'Full Track Not Available' : 'Premium Required',
+          isPremium ? 
+            'This track cannot be played in the app. Would you like to open it in Spotify?' :
+            'Full track playback requires a Spotify Premium account.',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Open Spotify', onPress: handleOpenInSpotify }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('Error playing track:', error);
+      Alert.alert('Playback Error', 'Unable to play this track. Please try again.');
     }
   };
 
@@ -107,10 +153,10 @@ export default function PlayerControls({ compact = false, showProgress = false }
           <TouchableOpacity 
             style={[
               styles.compactPlayButton,
-              !isPlayable && styles.disabledButton
+              (!isPlayable && !currentTrack.uri) && styles.disabledButton
             ]} 
             onPress={handlePlayPause}
-            disabled={!isPlayable && !hasUri}
+            disabled={isLoading}
           >
             {isPlaying ? (
               <Ionicons name="pause" size={16} color={Colors.text} />
@@ -120,10 +166,16 @@ export default function PlayerControls({ compact = false, showProgress = false }
           </TouchableOpacity>
         )}
         
-        {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
-          <TouchableOpacity style={styles.compactControlButton} onPress={handleOpenInSpotify}>
-            <Ionicons name="open-outline" size={16} color={Colors.textSecondary} />
-          </TouchableOpacity>
+        {Platform.OS === 'ios' && isPremium && isSpotifyConnectActive && activeDevice && (
+          <View style={styles.compactDeviceIndicator}>
+            <Ionicons name="phone-portrait-outline" size={14} color={Colors.accent} />
+          </View>
+        )}
+        
+        {!isPremium && (
+          <View style={styles.compactPreviewBadge}>
+            <Text style={styles.previewText}>Preview</Text>
+          </View>
         )}
       </View>
     );
@@ -151,12 +203,24 @@ export default function PlayerControls({ compact = false, showProgress = false }
       )}
       
       <View style={styles.controlsContainer}>
-        {Platform.OS === 'ios' && isPremium && hasUri && (
+        {Platform.OS === 'ios' && isPremium && hasUri && !isSpotifyConnectActive && (
           <TouchableOpacity 
             style={styles.deviceButton} 
             onPress={() => {
-              fetchSpotifyDevices();
-              // Show device selection UI here
+              Alert.alert(
+                'Enable Spotify Connect',
+                'Would you like to enable full track playback using Spotify Connect?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { 
+                    text: 'Enable', 
+                    onPress: () => {
+                      toggleSpotifyConnectActive();
+                      fetchSpotifyDevices();
+                    }
+                  }
+                ]
+              );
             }}
           >
             <Ionicons name="phone-portrait-outline" size={20} color={Colors.textSecondary} />
@@ -179,10 +243,10 @@ export default function PlayerControls({ compact = false, showProgress = false }
           <TouchableOpacity 
             style={[
               styles.playButton,
-              !isPlayable && styles.disabledButton
+              (!isPlayable && !currentTrack.uri) && styles.disabledButton
             ]} 
             onPress={handlePlayPause}
-            disabled={!isPlayable && !hasUri}
+            disabled={isLoading}
           >
             {isPlaying ? (
               <Ionicons name="pause" size={24} color={Colors.text} />
@@ -199,12 +263,6 @@ export default function PlayerControls({ compact = false, showProgress = false }
         >
           <Ionicons name="play-skip-forward" size={24} color={Colors.text} />
         </TouchableOpacity>
-        
-        {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
-          <TouchableOpacity style={styles.controlButton} onPress={handleOpenInSpotify}>
-            <Ionicons name="open-outline" size={20} color={Colors.textSecondary} />
-          </TouchableOpacity>
-        )}
         
         {Platform.OS === 'web' && isPremium && hasUri && !webPlayerVisible && (
           <TouchableOpacity 
@@ -300,5 +358,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  compactDeviceIndicator: {
+    width: 24,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  compactPreviewBadge: {
+    backgroundColor: Colors.accent,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    marginLeft: 8,
+  },
+  previewText: {
+    color: Colors.text,
+    fontSize: 10,
+    fontWeight: '500',
   },
 });

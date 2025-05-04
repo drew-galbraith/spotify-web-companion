@@ -64,13 +64,22 @@ export function useTrip(id: string | undefined) {
             }
             
             try {
+              // Check if we have a Spotify ID for the playlist
+              if (!playlist.spotifyId) {
+                console.warn(`Playlist ${playlist.id} has no Spotify ID, skipping track fetch`);
+                return {
+                  ...playlist,
+                  tracks: []
+                };
+              }
+              
               // Fetch up to 5 tracks for the playlist preview with a timeout
               const controller = new AbortController();
               const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
               
               try {
                 const tracksResponse = await spotifyApi.fetchFromSpotify(
-                  `/playlists/${playlist.id}/tracks?limit=5`
+                  `/v1/playlists/${playlist.spotifyId}/tracks?limit=5`
                 );
                 
                 clearTimeout(timeoutId);
@@ -97,7 +106,7 @@ export function useTrip(id: string | undefined) {
               
               return playlist;
               } catch (err) {
-                console.error("Error fetching playlist tracks:", err);
+                console.error(`Error fetching playlist tracks for Spotify ID ${playlist.spotifyId}:`, err);
                 // Return the playlist without tracks if there's an error
                 clearTimeout(timeoutId);
                 return {
