@@ -1,5 +1,6 @@
+
 import { useLocalSearchParams } from "expo-router";
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform } from "react-native";
+import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
@@ -17,6 +18,8 @@ import PlayerControls from "../../components/player-controls";
 import { useSpotifyApi } from "../../hooks/use-spotify-api";
 import { getDoc, doc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Linking from "expo-linking";
 
 interface PlaylistTrack {
   id: string;
@@ -43,9 +46,14 @@ interface PlaylistData {
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isPremium } = useSafeAuth();
+  const { isPremium, user } = useSafeAuth();
   const { fetchFromSpotify } = useSpotifyApi();
   
+  // Add local state for saved tracks
+  const [savedTracks, setSavedTracks] = useState<{ [key: string]: boolean }>({});
+  const [isPlaylistSaved, setIsPlaylistSaved] = useState(false);
+  const [isSavingPlaylist, setIsSavingPlaylist] = useState(false);
+
   // Add local state for playlist data
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +79,112 @@ export default function PlaylistScreen() {
   } = usePlayerStore();
 
   const [showDevices, setShowDevices] = useState(false);
+
+  // Fetch saved status for all tracks in batch
+  useEffect(() => {
+    const checkTracksSaved = async () => {
+      if (!playlist?.tracks || playlist.tracks.length === 0) return;
+      
+      // Spotify API supports checking up to 50 tracks at once
+      const batchSize = 50;
+      const trackIds = playlist.tracks.map(track => track.id);
+      const batches = [];
+      
+      for (let i = 0; i < trackIds.length; i += batchSize) {
+        batches.push(trackIds.slice(i, i + batchSize));
+      }
+      
+      try {
+        const results = await Promise.all(
+          batches.map(async (batch) => {
+            try {
+              const response = await fetchFromSpotify(`/v1/me/tracks/contains?ids=${batch.join(',')}`);
+              return response || [];
+            } catch (error) {
+              console.error('Error checking batch of tracks:', error);
+              return Array(batch.length).fill(false);
+            }
+          })
+        );
+        
+        // Combine results into a map
+        const savedStateMap: { [key: string]: boolean } = {};
+        let index = 0;
+        
+        results.forEach(batchResult => {
+          if (Array.isArray(batchResult)) {
+            batchResult.forEach(isSaved => {
+              const trackId = trackIds[index];
+              if (trackId) {
+                savedStateMap[trackId] = isSaved;
+              }
+              index++;
+            });
+          }
+        });
+        
+        setSavedTracks(savedStateMap);
+      } catch (error) {
+        console.error('Error checking saved tracks:', error);
+      }
+    };
+    
+    checkTracksSaved();
+  }, [playlist?.tracks]);
+
+  // Check if playlist is followed by current user
+  useEffect(() => {
+    const checkPlaylistFollow = async () => {
+      if (!playlist?.spotifyId || !user?.id) return;
+      
+      try {
+        const response = await fetchFromSpotify(`/v1/playlists/${playlist.spotifyId}/followers/contains?ids=${user.id}`);
+        if (Array.isArray(response) && response.length > 0) {
+          setIsPlaylistSaved(response[0]);
+        }
+      } catch (error) {
+        console.error('Error checking if playlist is followed:', error);
+      }
+    };
+    
+    checkPlaylistFollow();
+  }, [playlist?.spotifyId, user?.id]);
+
+  // Handle favorite toggle
+  const handleToggleFavorite = (trackId: string, newState: boolean) => {
+    setSavedTracks(prev => ({
+      ...prev,
+      [trackId]: newState
+    }));
+  };
+
+  // Handle playlist follow/unfollow
+  const togglePlaylistSaved = async () => {
+    if (!playlist?.spotifyId || isSavingPlaylist) return;
+    
+    setIsSavingPlaylist(true);
+    try {
+      const method = isPlaylistSaved ? 'DELETE' : 'PUT';
+      
+      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlist.spotifyId}/followers`, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${await AsyncStorage.getItem('spotify_token')}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok || response.status === 200 || response.status === 204) {
+        setIsPlaylistSaved(!isPlaylistSaved);
+      } else {
+        console.error('Failed to toggle playlist saved status:', response.status);
+      }
+    } catch (error) {
+      console.error('Error toggling playlist saved status:', error);
+    } finally {
+      setIsSavingPlaylist(false);
+    }
+  };
 
   // Ensure the player is visible when viewing a playlist
   useEffect(() => {
@@ -178,21 +292,58 @@ export default function PlaylistScreen() {
     return <ErrorView message="Failed to load playlist" />;
   }
 
-  const handlePlayPause = () => {
-    if (isPlaying && currentTrack?.id === playlist.tracks[0]?.id) {
+  const handlePlayPause = async () => {
+    if (!playlist?.tracks || playlist.tracks.length === 0) return;
+
+    // Check if the first track of this playlist is currently playing
+    const isPlayingThisPlaylist = currentTrack?.id === playlist.tracks[0].id;
+    
+    if (isPlaying && isPlayingThisPlaylist) {
+      // Pause the current track
       pauseTrack();
-    } else if (playlist.tracks && playlist.tracks.length > 0) {
-      playTrack(playlist.tracks[0]);
+    } else {
+      // Play the first track of the playlist
+      const firstTrack = playlist.tracks[0];
+      const trackWithPlaylistInfo: PlaylistTrack & { playlistId?: string; playlistName?: string } = {
+        ...firstTrack,
+        playlistId: playlist.id,
+        playlistName: playlist.name
+      };
+      playTrack(trackWithPlaylistInfo);
     }
   };
 
   const handleTrackPress = (track: any) => {
-    playTrack(track);
+    const trackWithPlaylistInfo = {
+      ...track,
+      playlistId: playlist?.id,
+      playlistName: playlist?.name
+    };
+    playTrack(trackWithPlaylistInfo);
   };
 
   const handleOpenInSpotify = async () => {
     if (playlist.uri) {
-      await openInSpotify(playlist.uri);
+      // For mobile platforms, open the Spotify app
+      if (Platform.OS !== 'web') {
+        try {
+          const spotifyUrl = `spotify:playlist:${playlist.uri.split(':')[2]}`;
+          const canOpen = await Linking.canOpenURL(spotifyUrl);
+          
+          if (canOpen) {
+            await Linking.openURL(spotifyUrl);
+            console.log('Opened playlist in Spotify app');
+          } else {
+            // If Spotify app is not installed, open in browser
+            const webUrl = `https://open.spotify.com/playlist/${playlist.uri.split(':')[2]}`;
+            await Linking.openURL(webUrl);
+            console.log('Opened playlist in browser');
+          }
+        } catch (error) {
+          console.error('Error opening Spotify:', error);
+          Alert.alert('Error', 'Failed to open Spotify');
+        }
+      }
     }
   };
 
@@ -215,6 +366,9 @@ export default function PlaylistScreen() {
         (isSpotifyConnectActive && isPremium && track.uri) || track.preview_url :
         track.preview_url
     ) : null;
+
+  // Check if the current track is from this playlist
+  const isPlayingFromThisPlaylist = currentTrack?.playlistId === playlist.id;
 
   return (
     <View style={styles.container}>
@@ -269,15 +423,27 @@ export default function PlaylistScreen() {
               >
                 {isPlayerLoading ? (
                   <ActivityIndicator size="small" color={Colors.text} />
-                ) : isPlaying && currentTrack?.id === (playlist.tracks && playlist.tracks.length > 0 ? playlist.tracks[0]?.id : null) ? (
+                ) : isPlaying && isPlayingFromThisPlaylist && currentTrack?.id === playlist.tracks[0]?.id ? (
                   <Ionicons name="pause" size={24} color={Colors.text} />
                 ) : (
                   <Ionicons name="play" size={24} color={Colors.text} />
                 )}
               </TouchableOpacity>
               
-              <TouchableOpacity style={styles.heartButton}>
-                <Ionicons name="heart-outline" size={24} color={Colors.textSecondary} />
+              <TouchableOpacity 
+                style={styles.heartButton}
+                onPress={togglePlaylistSaved}
+                disabled={isSavingPlaylist}
+              >
+                {isSavingPlaylist ? (
+                  <ActivityIndicator size="small" color={isPlaylistSaved ? '#1DB954' : Colors.textSecondary} />
+                ) : (
+                  <Ionicons 
+                    name={isPlaylistSaved ? "heart" : "heart-outline"} 
+                    size={24} 
+                    color={isPlaylistSaved ? '#1DB954' : Colors.textSecondary}
+                  />
+                )}
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -318,9 +484,9 @@ export default function PlaylistScreen() {
             )}
             
             {/* Progress bar for iOS Spotify Connect */}
-            {Platform.OS === 'ios' && isSpotifyConnectActive && isPlaying && (
+            {Platform.OS === 'ios' && isSpotifyConnectActive && isPlaying && isPlayingFromThisPlaylist && (
               <View style={styles.progressContainer}>
-                <Ionicons name="play"erControls compact={true} showProgress={true} />
+                <PlayerControls compact={true} showProgress={true} />
               </View>
             )}
           </View>
@@ -334,6 +500,10 @@ export default function PlaylistScreen() {
               track={item}
               index={index}
               onPress={() => handleTrackPress(item)}
+              savedTracks={savedTracks}
+              onToggleFavorite={handleToggleFavorite}
+              showIndex={true}
+              showArtwork={true}
             />
           )}
           ListHeaderComponent={
@@ -453,7 +623,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "Colors.primary", // Spotify green
+    backgroundColor: '#1DB954', // Spotify green
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,

@@ -117,6 +117,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tokenEndpoint: 'https://accounts.spotify.com/api/token',
   };
   
+
+
+  
   // Load user data from SecureStore on initial render
   useEffect(() => {
     const loadUserData = async () => {
@@ -281,13 +284,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           'playlist-read-collaborative',
           'playlist-modify-public',
           'playlist-modify-private',
-          
+
+          // Follow
+          'user-follow-modify',
+          'user-follow-read',
+
+          // Library
+          'user-library-modify',
+          'user-library-read',
+
           // Player permissions
           'user-read-playback-state',
           'user-modify-playback-state',
           'user-read-currently-playing',
           'streaming',
-          'app-remote-control'        
+          'app-remote-control',
         ],
         redirectUri,
         responseType: AuthSession.ResponseType.Code,

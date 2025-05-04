@@ -142,7 +142,7 @@ export default function PlayerControls({ compact = false, showProgress = false }
     (isSpotifyConnectActive && isPremium && hasUri) || hasPreview :
     hasPreview;
 
-  if (compact) {
+if (compact) {
     return (
       <View style={styles.compactContainer}>
         {isLoading ? (
@@ -166,13 +166,37 @@ export default function PlayerControls({ compact = false, showProgress = false }
           </TouchableOpacity>
         )}
         
-        {Platform.OS === 'ios' && isPremium && isSpotifyConnectActive && activeDevice && (
-          <View style={styles.compactDeviceIndicator}>
-            <Ionicons name="phone-portrait-outline" size={14} color={Colors.accent} />
-          </View>
+        {Platform.OS === 'ios' && isPremium && hasUri && !currentTrack.preview_url && (
+          <TouchableOpacity 
+            style={styles.compactDeviceButton}
+            onPress={() => {
+              if (!isSpotifyConnectActive) {
+                Alert.alert(
+                  'Spotify Connect',
+                  'Enable full track playback?',
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Enable', 
+                      onPress: () => {
+                        toggleSpotifyConnectActive();
+                        fetchSpotifyDevices();
+                      }
+                    }
+                  ]
+                );
+              }
+            }}
+          >
+            <Ionicons 
+              name="phone-portrait-outline" 
+              size={14} 
+              color={isSpotifyConnectActive ? Colors.primary : Colors.textSecondary} 
+            />
+          </TouchableOpacity>
         )}
         
-        {!isPremium && (
+        {!isPremium && currentTrack.preview_url && (
           <View style={styles.compactPreviewBadge}>
             <Text style={styles.previewText}>Preview</Text>
           </View>
@@ -278,6 +302,7 @@ export default function PlayerControls({ compact = false, showProgress = false }
 }
 
 const styles = StyleSheet.create({
+  
   container: {
     width: '100%',
   },
@@ -340,6 +365,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
   },
+
   compactContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -351,6 +377,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  compactDeviceButton: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 8,
   },
   compactControlButton: {
     width: 32,

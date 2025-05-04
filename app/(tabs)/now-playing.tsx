@@ -13,7 +13,8 @@ import Slider from '@react-native-community/slider';
 
 export default function NowPlayingScreen() {
   const router = useRouter();
-  const { isPremium } = useSafeAuth();
+  const { user, isPremium, refreshSpotifyToken } = useSafeAuth(); // Get all values from auth
+  
   const { 
     currentTrack, 
     isPlaying, 
@@ -35,19 +36,62 @@ export default function NowPlayingScreen() {
     webPlayerReady,
     webPlayerVisible,
     toggleWebPlayerVisibility,
-    syncPlaybackState
+    syncPlaybackState,
+    setAuthContext,
+    error: playerError,
+    // Initialize player like in playlist
+    initWebPlayer,
+    connectWebPlayer,
+    shuffleActive,
+    repeatMode,
+    toggleShuffle,
+    cycleRepeatMode 
   } = usePlayerStore();
 
   const [showDevices, setShowDevices] = useState(false);
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
-  // Initialize Spotify Connect for iOS
+  // Set up auth context for player store (simplified like in playlist)
   useEffect(() => {
-    if (Platform.OS === 'ios' && isPremium && currentTrack) {
-      fetchSpotifyDevices();
-      syncPlaybackState();
+    setAuthContext({
+      refreshSpotifyToken: refreshSpotifyToken
+    });
+
+    return () => {
+      setAuthContext(null);
+    };
+  }, [refreshSpotifyToken, setAuthContext]);
+
+  // Initialize Web Playback SDK on web platform (from playlist pattern)
+  useEffect(() => {
+    if (Platform.OS === 'web' && isPremium) {
+      const setupWebPlayer = async () => {
+        await initWebPlayer();
+        await connectWebPlayer();
+      };
+      
+      setupWebPlayer();
     }
-  }, [isPremium, currentTrack, fetchSpotifyDevices, syncPlaybackState]);
+  }, [isPremium]);
+
+  // Fetch Spotify devices for iOS (from playlist pattern)
+  useEffect(() => {
+    if (Platform.OS === 'ios' && isPremium) {
+      fetchSpotifyDevices();
+    }
+  }, [isPremium]);
+
+  // Listen for player errors
+  useEffect(() => {
+    if (playerError) {
+      console.error('Player error:', playerError);
+      if (playerError.includes('token')) {
+        setDeviceError('Token expired. Please retry.');
+      } else {
+        setDeviceError(playerError);
+      }
+    }
+  }, [playerError]);
 
   // If no track is playing, show a message
   if (!currentTrack) {
@@ -77,39 +121,17 @@ export default function NowPlayingScreen() {
         return;
       }
 
-      // Different logic for premium vs free users
-      if (isPremium && currentTrack.uri) {
-        // Premium users can play any track
-        if (Platform.OS === 'ios') {
-          if (!isSpotifyConnectActive) {
-            toggleSpotifyConnectActive();
-            await fetchSpotifyDevices();
-            
-            if (spotifyDevices.length === 0) {
-              setDeviceError('No Spotify devices found. Please open Spotify on another device.');
-              return;
-            }
-          }
-          resumeTrack();
-        } else if (Platform.OS === 'web') {
-          if (!webPlayerReady) {
-            if (!webPlayerVisible) {
-              toggleWebPlayerVisibility();
-            }
-            setTimeout(() => resumeTrack(), 1000);
-          } else {
-            resumeTrack();
-          }
-        } else if (currentTrack.preview_url) {
-          resumeTrack();
-        } else {
-          handleOpenInSpotify();
-        }
-      } else if (currentTrack.preview_url) {
-        // Free users can only play previews
+      // Check playability based on platform (from playlist pattern)
+      const isPlayable = Platform.OS === 'web' ? 
+        (webPlayerReady && isPremium && currentTrack.uri) || currentTrack.preview_url : 
+        Platform.OS === 'ios' ?
+        (isSpotifyConnectActive && isPremium && currentTrack.uri) || currentTrack.preview_url :
+        currentTrack.preview_url;
+
+      if (isPlayable) {
         resumeTrack();
       } else {
-        // No preview available, open in Spotify
+        // No preview available, show options
         Alert.alert(
           isPremium ? 'Full Track Not Available' : 'Premium Required',
           isPremium ? 
@@ -122,18 +144,36 @@ export default function NowPlayingScreen() {
         );
       }
     } catch (error) {
-      console.error('Error playing track:', error);
+      console.error('Error in handlePlayPause:', error);
       Alert.alert('Playback Error', 'Unable to play this track. Please try again.');
     }
   };
 
-  const handleSkipNext = () => {
+  const handleShuffle = async () => {
+    try {
+      await toggleShuffle(!shuffleActive);
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Shuffle Error", "Couldn’t toggle shuffle.");
+    }
+  };
+
+  const handleRepeat = async () => {
+    try {
+      await cycleRepeatMode(); // store should pick next of off→context→track→off
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Repeat Error", "Couldn’t change repeat mode.");
+    }
+  };
+
+  const handleSkipNext = async () => {
     if (Platform.OS === 'ios' && isSpotifyConnectActive) {
       skipToNextOnSpotifyConnect();
     }
   };
 
-  const handleSkipPrevious = () => {
+  const handleSkipPrevious = async () => {
     if (Platform.OS === 'ios' && isSpotifyConnectActive) {
       skipToPreviousOnSpotifyConnect();
     }
@@ -155,13 +195,22 @@ export default function NowPlayingScreen() {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  const hasPreview = !!currentTrack.preview_url;
-  const hasUri = !!currentTrack.uri;
-  const isPlayable = Platform.OS === 'web' ? 
-    (webPlayerReady && isPremium && hasUri) || hasPreview : 
+  const handleDevicePress = () => {
+    setShowDevices(!showDevices);
+    fetchSpotifyDevices();
+  };
+
+  const handleDeviceSelect = (deviceId: string) => {
+    usePlayerStore.getState().transferPlayback(deviceId);
+    setShowDevices(false);
+  };
+
+  // Check if track is playable (from playlist pattern)
+  const isTrackPlayable = Platform.OS === 'web' ? 
+    (webPlayerReady && isPremium && currentTrack.uri) || currentTrack.preview_url : 
     Platform.OS === 'ios' ?
-    (isSpotifyConnectActive && isPremium && hasUri) || hasPreview :
-    hasPreview;
+    (isSpotifyConnectActive && isPremium && currentTrack.uri) || currentTrack.preview_url :
+    currentTrack.preview_url;
 
   return (
     <View style={styles.container}>
@@ -183,7 +232,7 @@ export default function NowPlayingScreen() {
             <View style={styles.deviceSelection}>
               <TouchableOpacity 
                 style={styles.deviceSelector}
-                onPress={() => setShowDevices(!showDevices)}
+                onPress={handleDevicePress}
               >
                 {isSpotifyConnectActive && activeDevice ? (
                   <Text style={styles.deviceText}>
@@ -195,7 +244,7 @@ export default function NowPlayingScreen() {
                 <Ionicons name="chevron-down" size={16} color={Colors.textSecondary} />
               </TouchableOpacity>
               
-              {showDevices && (
+              {showDevices && spotifyDevices.length > 0 && (
                 <View style={styles.devicesList}>
                   {spotifyDevices.map(device => (
                     <TouchableOpacity
@@ -204,21 +253,12 @@ export default function NowPlayingScreen() {
                         styles.deviceItem,
                         device.is_active && styles.activeDevice
                       ]}
-                      onPress={() => {
-                        usePlayerStore.getState().transferPlayback(device.id);
-                        setShowDevices(false);
-                      }}
+                      onPress={() => handleDeviceSelect(device.id)}
                     >
                       <Text style={styles.deviceItemText}>{device.name}</Text>
                       <Text style={styles.deviceType}>{device.type}</Text>
                     </TouchableOpacity>
                   ))}
-                  
-                  {spotifyDevices.length === 0 && (
-                    <Text style={styles.noDevicesText}>
-                      No devices found. Open Spotify on another device.
-                    </Text>
-                  )}
                 </View>
               )}
               
@@ -260,8 +300,12 @@ export default function NowPlayingScreen() {
           </View>
 
           <View style={styles.controlsContainer}>
-            <TouchableOpacity style={styles.secondaryControl}>
-              <Ionicons name="shuffle-outline" size={24} color={Colors.textSecondary} />
+            <TouchableOpacity style={styles.secondaryControl} onPress={handleShuffle}>
+              <Ionicons
+                name={shuffleActive ? "shuffle" : "shuffle-outline"}
+                size={24}
+                color={shuffleActive ? Colors.accent : Colors.textSecondary}
+              />
             </TouchableOpacity>
             
             <TouchableOpacity 
@@ -275,7 +319,7 @@ export default function NowPlayingScreen() {
             <TouchableOpacity 
               style={[
                 styles.playButton,
-                (!isPlayable && !currentTrack.uri) && styles.disabledButton
+                (!isTrackPlayable) && styles.disabledButton
               ]} 
               onPress={handlePlayPause}
               disabled={isLoading}
@@ -331,7 +375,7 @@ export default function NowPlayingScreen() {
             </View>
           )}
 
-          {Platform.OS === 'web' && isPremium && hasUri && !webPlayerVisible && (
+          {Platform.OS === 'web' && isPremium && currentTrack.uri && !webPlayerVisible && (
             <TouchableOpacity 
               style={styles.webPlayerButton} 
               onPress={toggleWebPlayerVisibility}

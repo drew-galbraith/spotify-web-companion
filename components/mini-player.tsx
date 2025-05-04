@@ -8,6 +8,51 @@ import Colors from "../constants/colors";
 import { usePlayerStore } from "../store/player-store";
 import { useSafeAuth } from "../context/auth-context";
 
+// iOS-style Playing Animation component
+const PlayingAnimation = () => {
+  const bar1 = useRef(new Animated.Value(8)).current;
+  const bar2 = useRef(new Animated.Value(12)).current;
+  const bar3 = useRef(new Animated.Value(10)).current;
+  const bar4 = useRef(new Animated.Value(6)).current;
+
+  useEffect(() => {
+    const createAnimation = (value: Animated.Value, minHeight: number, maxHeight: number, duration: number) => {
+      return Animated.sequence([
+        Animated.timing(value, {
+          toValue: maxHeight,
+          duration: duration / 2,
+          useNativeDriver: false,
+        }),
+        Animated.timing(value, {
+          toValue: minHeight,
+          duration: duration / 2,
+          useNativeDriver: false,
+        }),
+      ]);
+    };
+
+    const runAnimation = () => {
+      Animated.parallel([
+        Animated.loop(createAnimation(bar1, 4, 12, 800), { iterations: -1 }),
+        Animated.loop(createAnimation(bar2, 6, 14, 900), { iterations: -1 }),
+        Animated.loop(createAnimation(bar3, 5, 12, 850), { iterations: -1 }),
+        Animated.loop(createAnimation(bar4, 3, 10, 750), { iterations: -1 }),
+      ]).start();
+    };
+
+    runAnimation();
+  }, []);
+
+  return (
+    <View style={styles.playingAnimation}>
+      <Animated.View style={[styles.bar, { height: bar1 }]} />
+      <Animated.View style={[styles.bar, { height: bar2 }]} />
+      <Animated.View style={[styles.bar, { height: bar3 }]} />
+      <Animated.View style={[styles.bar, { height: bar4 }]} />
+    </View>
+  );
+};
+
 export default function MiniPlayer() {
   const router = useRouter();
   const { isPremium, isAuthenticated } = useSafeAuth();
@@ -140,6 +185,11 @@ export default function MiniPlayer() {
     }
   };
 
+  const handleDeviceSelect = (deviceId: string) => {
+    usePlayerStore.getState().transferPlayback(deviceId);
+    setShowDevices(false);
+  };
+
   // Determine if the track is playable
   const hasPreview = !!currentTrack.preview_url;
   const hasUri = !!currentTrack.uri;
@@ -167,9 +217,9 @@ export default function MiniPlayer() {
         onPress={togglePlayerVisibility}
       >
         {isPlayerVisible ? (
-          <Ionicons Ionicons name="chevron-down" size={20} color={Colors.text} />
+          <Ionicons name="chevron-down" size={20} color={Colors.text} />
         ) : (
-          <Ionicons Ionicons name="chevron-up" size={20} color={Colors.text} />
+          <Ionicons name="chevron-up" size={20} color={Colors.text} />
         )}
       </TouchableOpacity>
       
@@ -177,7 +227,7 @@ export default function MiniPlayer() {
         style={styles.closeButton}
         onPress={handleClose}
       >
-        <Ionicons Ionicons name="close" size={20} color={Colors.text} />
+        <Ionicons name="close" size={20} color={Colors.text} />
       </TouchableOpacity>
       
       <TouchableOpacity 
@@ -185,11 +235,18 @@ export default function MiniPlayer() {
         onPress={handlePress}
         activeOpacity={0.9}
       >
-        <Image 
-          source={{ uri: currentTrack.albumImageUrl }} 
-          style={styles.image} 
-          contentFit="cover"
-        />
+        <View style={styles.albumArtContainer}>
+          <Image 
+            source={{ uri: currentTrack.albumImageUrl }} 
+            style={styles.image} 
+            contentFit="cover"
+          />
+          {isPlaying && (
+            <View style={styles.playingIndicator}>
+              <PlayingAnimation />
+            </View>
+          )}
+        </View>
         
         <View style={styles.info}>
           <Text style={styles.title} numberOfLines={1}>{currentTrack.name}</Text>
@@ -219,13 +276,13 @@ export default function MiniPlayer() {
               style={styles.deviceButton} 
               onPress={handleDevicePress}
             >
-              <Ionicons Ionicons name="phone-portrait" size={20} color={Colors.text} />
+              <Ionicons name="phone-portrait" size={20} color={Colors.text} />
             </TouchableOpacity>
           )}
           
           {!isPlayable && Platform.OS !== 'web' && currentTrack.uri && (
             <TouchableOpacity style={styles.controlButton} onPress={handleOpenInSpotify}>
-              <Ionicons Ionicons name="open-outline" size={20} color={Colors.text} />
+              <Ionicons name="open-outline" size={20} color={Colors.text} />
             </TouchableOpacity>
           )}
           
@@ -234,7 +291,7 @@ export default function MiniPlayer() {
             onPress={handleSkipPrevious}
             disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
           >
-            <Ionicons Ionicons name="play-skip-back" size={20} color={Colors.text} />
+            <Ionicons name="play-skip-back" size={20} color={Colors.text} />
           </TouchableOpacity>
           
           {isLoading ? (
@@ -251,9 +308,9 @@ export default function MiniPlayer() {
               disabled={!isPlayable && !hasUri}
             >
               {isPlaying ? (
-                <Ionicons Ionicons name="pause" size={20} color={Colors.text} />
+                <Ionicons name="pause" size={20} color={Colors.text} />
               ) : (
-                <Ionicons Ionicons name="play" size={20} color={Colors.text} />
+                <Ionicons name="play" size={20} color={Colors.text} />
               )}
             </TouchableOpacity>
           )}
@@ -263,7 +320,7 @@ export default function MiniPlayer() {
             onPress={handleSkipNext}
             disabled={!(Platform.OS === 'ios' && isSpotifyConnectActive)}
           >
-            <Ionicons Ionicons name="play-skip-forward" size={20} color={Colors.text} />
+            <Ionicons name="play-skip-forward" size={20} color={Colors.text} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -279,10 +336,7 @@ export default function MiniPlayer() {
                 styles.deviceItem,
                 device.is_active && styles.activeDeviceItem
               ]}
-              onPress={() => {
-                usePlayerStore.getState().transferPlayback(device.id);
-                setShowDevices(false);
-              }}
+              onPress={() => handleDeviceSelect(device.id)}
             >
               <Text style={styles.deviceName}>{device.name}</Text>
               <Text style={styles.deviceType}>{device.type}</Text>
@@ -337,11 +391,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 8,
   },
-  image: {
+  albumArtContainer: {
+    position: 'relative',
     width: 48,
     height: 48,
     borderRadius: 4,
     marginRight: 12,
+  },
+  image: {
+    width: 48,
+    height: 48,
+    borderRadius: 4,
+  },
+  playingIndicator: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 4,
+    padding: 2,
+  },
+  playingAnimation: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    height: 12,
+    width: 16,
+  },
+  bar: {
+    width: 3,
+    backgroundColor: Colors.primary,
+    borderRadius: 1.5,
+    marginRight: 1,
   },
   info: {
     flex: 1,
