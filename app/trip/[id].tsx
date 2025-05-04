@@ -13,6 +13,10 @@ import { usePlayerStore } from "../../store/player-store";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { useTripDeletion } from "../../hooks/use-trip-deletion";
+import { getDoc, doc } from "firebase/firestore";
+import { db } from "../../lib/firebase";
+import { useSpotifyApi } from "../../hooks/use-spotify-api";
+
 
 // Define types for our data
 interface Track {
@@ -37,7 +41,14 @@ interface Playlist {
   tracks?: Track[];
 }
 
+interface PlaylistWithTracks extends Playlist {
+  spotifyId?: string;
+}
+
 export default function TripScreen() {
+
+  const { fetchFromSpotify } = useSpotifyApi();
+
   // Use useMemo to stabilize the id parameter
   const params = useLocalSearchParams<{ id: string }>();
   const id = useMemo(() => params.id, [params.id]);
@@ -65,21 +76,99 @@ export default function TripScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showOptionsMenu, setShowOptionsMenu] = useState(false);
+  const [playlists, setPlaylists] = useState<PlaylistWithTracks[]>([]);
   const optionsMenuRef = useRef(null);
 
   // Update local creation status when auto playlist creation is in progress
   useEffect(() => {
-    if (isCreating) {
-      setCreationStatus(currentStep);
-    } else {
-      setCreationStatus("");
+    const fetchPlaylistDetails = async () => {
+      try {
+        // Get detailed playlists from Firebase with Spotify data
+        if (trip?.playlists && trip.playlists.length > 0) {
+          const detailedPlaylists = [];
+          
+          for (const playlistRef of trip.playlists) {
+            // Fetch playlist document from Firebase
+            const playlistDoc = await getDoc(doc(db, "playlists", playlistRef.id));
+            
+            if (playlistDoc.exists()) {
+              const playlistData = playlistDoc.data();
+              let playlistWithDetails: PlaylistWithTracks = {
+                id: playlistDoc.id,
+                name: playlistData.name,
+                description: playlistData.description,
+                imageUrl: playlistData.imageUrl,
+                trackCount: playlistData.trackCount || 0,
+                spotifyId: playlistData.spotifyId
+              };
+              
+              // Fetch fresh data from Spotify
+              if (playlistData.spotifyId) {
+                try {
+                  const spotifyData = await fetchFromSpotify(`/v1/playlists/${playlistData.spotifyId}?fields=images,name,tracks.total`);
+                  
+                  if (spotifyData) {
+                    playlistWithDetails = {
+                      ...playlistWithDetails,
+                      imageUrl: spotifyData.images?.[0]?.url || playlistWithDetails.imageUrl,
+                      trackCount: spotifyData.tracks?.total || playlistWithDetails.trackCount
+                    };
+                  }
+                  
+                  // Fetch tracks for the playlist
+                  const tracksData = await fetchFromSpotify(`/v1/playlists/${playlistData.spotifyId}/tracks?limit=5`);
+                  
+                  if (tracksData?.items) {
+                    const tracks = tracksData.items
+                      .filter((item: any) => item.track && !item.track.is_local)
+                      .map((item: any) => {
+                        const track = item.track;
+                        return {
+                          id: track.id,
+                          name: track.name,
+                          artists: track.artists.map((a: any) => a.name),
+                          albumName: track.album.name,
+                          albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
+                          duration_ms: track.duration_ms,
+                          preview_url: track.preview_url,
+                          uri: track.uri
+                        };
+                      });
+                    
+                    playlistWithDetails.tracks = tracks;
+                  }
+                } catch (spotifyError) {
+                  console.error(`Error fetching Spotify data for playlist ${playlistData.spotifyId}:`, spotifyError);
+                }
+              }
+              
+              detailedPlaylists.push(playlistWithDetails);
+            }
+          }
+          
+          // Update state with detailed playlists
+          setPlaylists(detailedPlaylists);
+        }
+      } catch (error) {
+        console.error("Error fetching playlist details:", error);
+      }
+    };
+    
+    if (trip) {
+      fetchPlaylistDetails();
     }
-  }, [isCreating, currentStep]);
+  }, [trip]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
+    try {
+      await refetch();
+      // The useEffect will re-run and fetch fresh playlist data
+    } catch (error) {
+      console.error("Error refreshing:", error);
+    } finally {
+      setRefreshing(false);
+    }
   }, [refetch]);
 
   if (isLoading && !refreshing) {
@@ -248,11 +337,11 @@ export default function TripScreen() {
               </View>
             )}
 
-            {!isDeleting && trip.playlists && trip.playlists.length > 0 ? (
+            {!isDeleting && playlists.length > 0 ? (
               <View style={styles.playlistSection}>
                 <Text style={styles.sectionTitle}>Trip Playlist</Text>
                 
-                {trip.playlists.map((playlist: Playlist) => (
+                {playlists.map((playlist: PlaylistWithTracks) => (
                   <View key={playlist.id} style={styles.playlistCard}>
                     <Image 
                       source={{ uri: playlist.imageUrl }} 
@@ -277,8 +366,8 @@ export default function TripScreen() {
                           onPress={() => handlePlayPause(playlist)}
                         >
                           {currentTrack && 
-                           currentTrack.playlistId === playlist.id && 
-                           isPlaying ? (
+                          currentTrack.playlistId === playlist.id && 
+                          isPlaying ? (
                             <Ionicons name="pause" size={20} color={Colors.text} />
                           ) : (
                             <Ionicons name="play" size={20} color={Colors.text} />
@@ -301,7 +390,6 @@ export default function TripScreen() {
                               key={index}
                               style={styles.trackItem}
                               onPress={() => {
-                                // Ensure albumImageUrl is always defined
                                 const trackWithDefaults: Track = {
                                   ...track,
                                   playlistId: playlist.id,
@@ -321,8 +409,8 @@ export default function TripScreen() {
                                 </Text>
                               </View>
                               {currentTrack && 
-                               currentTrack.id === track.id && 
-                               isPlaying ? (
+                              currentTrack.id === track.id && 
+                              isPlaying ? (
                                 <Ionicons name="pause" size={16} color={Colors.primary} />
                               ) : (
                                 <Ionicons name="play" size={16} color={Colors.textSecondary} />

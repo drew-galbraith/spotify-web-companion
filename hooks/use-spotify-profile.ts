@@ -2,7 +2,7 @@
 // hooks/use-spotify-profile.ts
 import { useState, useEffect } from "react";
 import { Alert } from "react-native";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 import { supabase } from "../hooks/supabase";
 
@@ -17,7 +17,7 @@ type ProfileData = {
 };
 
 export function useSpotifyProfile() {
-  const { spotifyToken: token, isLoading: authLoading } = useAuth();
+  const { spotifyToken: token, isLoading: authLoading } = useSafeAuth();
   const { fetchFromSpotify } = useSpotifyApi();
   const [data, setData] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(false);

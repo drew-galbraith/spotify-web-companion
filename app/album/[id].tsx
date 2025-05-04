@@ -8,7 +8,7 @@ import Colors from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useSpotifyAlbum } from "../../hooks/use-spotify-album";
 import { usePlayerStore } from "../../store/player-store";
-import { useAuth } from "../../context/auth-context";
+import { useSafeAuth } from "../../context/auth-context";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,7 +19,7 @@ import PlayerControls from "../../components/player-controls";
 export default function AlbumScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isPremium } = useAuth();
+  const { isPremium } = useSafeAuth();
   const { data: album, isLoading, error } = useSpotifyAlbum(id);
   const { 
     currentTrack, 

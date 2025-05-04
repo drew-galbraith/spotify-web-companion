@@ -5,7 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Image } from 'expo-image';
 import Colors from '../../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../context/auth-context';
+import { useSafeAuth } from '../../context/auth-context';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import LoadingScreen from '../../components/loading-screen';
@@ -31,7 +31,7 @@ export default function ProfileScreen() {
     user, 
     spotifyToken, 
     signOut 
-  } = useAuth();
+  } = useSafeAuth();
   
   const [profile, setProfile] = useState<FirestoreUserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(false);

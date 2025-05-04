@@ -1,7 +1,7 @@
 
 // app/login.tsx
 import { View, Text, StyleSheet, TouchableOpacity, Platform, Linking, Alert } from "react-native";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { StatusBar } from "expo-status-bar";
 import { Image } from "expo-image";
@@ -9,7 +9,7 @@ import Colors from "../constants/colors";
 import { useState } from "react";
 
 export default function LoginScreen() {
-  const { signIn } = useAuth();
+  const { signIn } = useSafeAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {

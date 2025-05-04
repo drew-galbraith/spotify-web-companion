@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 
 export function useSpotifyStats() {
-  const { token } = useAuth();
+  const { token } = useSafeAuth();
   const spotifyApi = useSpotifyApi();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);

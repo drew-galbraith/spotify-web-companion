@@ -7,6 +7,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import Constants from 'expo-constants';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
+import { View, ActivityIndicator } from 'react-native';
 
 // Ensure browser can handle auth redirects
 WebBrowser.maybeCompleteAuthSession();
@@ -33,6 +34,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<SpotifyUser | null>(null);
   const [spotifyToken, setSpotifyToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // Get from constants
   const clientId = Constants.expoConfig?.extra?.spotifyClientId || '14457edd9cd944a08d5d1bcac2371875';
@@ -85,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         console.log('Error loading stored credentials', error);
       } finally {
         setIsLoading(false);
+        setIsInitialized(true);
       }
     };
 
@@ -294,6 +297,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Don't render children until initialized
+  if (!isInitialized) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+
   return (
     <AuthContext.Provider
       value={{
@@ -310,10 +323,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 };
 
-export const useAuth = (): AuthContextType => {
+export const useSafeAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
+  
+  // Return a default context if not available
   if (context === undefined) {
-    throw new Error('useAuth must be used inside AuthProvider');
+    console.warn('useSafeAuth called outside AuthProvider, returning default context');
+    return {
+      isAuthenticated: false,
+      user: null,
+      spotifyToken: null,
+      isLoading: true,
+      signIn: async () => { console.warn('signIn called outside AuthProvider'); },
+      signOut: async () => { console.warn('signOut called outside AuthProvider'); },
+    };
   }
+  
   return context;
 };

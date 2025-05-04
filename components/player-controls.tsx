@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TouchableOpacity, Platform, ActivityIndicator }
 import Colors from '../constants/colors';
 import { Ionicons } from '@expo/vector-icons';
 import { usePlayerStore } from '../store/player-store';
-import { useAuth } from '../context/auth-context';
+import { useSafeAuth } from '../context/auth-context';
 import Slider from '@react-native-community/slider';
 
 interface PlayerControlsProps {
@@ -12,7 +12,7 @@ interface PlayerControlsProps {
 }
 
 export default function PlayerControls({ compact = false, showProgress = false }: PlayerControlsProps) {
-  const { isPremium, isAuthenticated } = useAuth();
+  const { isPremium, isAuthenticated } = useSafeAuth();
   const { 
     currentTrack, 
     isPlaying, 

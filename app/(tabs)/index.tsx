@@ -12,7 +12,7 @@ import TopItemsList from "../../components/top-items-list";
 import GenreDistribution from "../../components/genre-distribution";
 import { usePlayerStore } from "../../store/player-store";
 import { useRouter } from "expo-router";
-import { useAuth } from "../../context/auth-context";
+import { useSafeAuth } from "../../context/auth-context";
 import { 
   SpotifyStats, 
   SpotifyUser, 
@@ -27,7 +27,7 @@ export default function IndexScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   
-  const { user, spotifyToken } = useAuth();
+  const { user, spotifyToken } = useSafeAuth();
   const { currentTrack, isPlaying } = usePlayerStore();
   const router = useRouter();
 

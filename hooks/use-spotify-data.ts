@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { mockFeaturedPlaylists, mockNewReleases, mockRecentlyPlayed } from "../mocks/spotify-data";
 
 export function useSpotifyData() {
-  const { token } = useAuth();
+  const { token } = useSafeAuth();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

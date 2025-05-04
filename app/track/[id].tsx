@@ -8,7 +8,7 @@ import Colors from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useSpotifyTrack } from "../../hooks/use-spotify-track";
 import { usePlayerStore } from "../../store/player-store";
-import { useAuth } from "../../context/auth-context";
+import { useSafeAuth } from "../../context/auth-context";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,7 +18,7 @@ import PlayerControls from "../../components/player-controls";
 export default function TrackScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isPremium } = useAuth();
+  const { isPremium } = useSafeAuth();
   const { data: track, isLoading, error } = useSpotifyTrack(id);
   const { 
     currentTrack, 

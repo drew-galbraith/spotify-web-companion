@@ -3,11 +3,11 @@ import React, { useEffect } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { usePlayerStore } from '../store/player-store';
-import { useAuth } from '../context/auth-context';
+import { useSafeAuth } from '../context/auth-context';
 import Colors from '../constants/colors';
 
 export default function WebPlayerControls() {
-  const { isPremium, isAuthenticated } = useAuth();
+  const { isPremium, isAuthenticated } = useSafeAuth();
   const { 
     currentTrack, 
     isPlaying, 

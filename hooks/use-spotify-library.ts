@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 import { Alert } from "react-native";
 
 export function useSpotifyLibrary() {
-  const { token } = useAuth();
+  const { token } = useSafeAuth();
   const { fetchFromSpotify } = useSpotifyApi();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);

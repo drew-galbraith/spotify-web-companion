@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useTripStore, type Trip } from "../store/trip-store";
 import { db } from "@/lib/firebase";
 import { collection, query, where, onSnapshot, QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 
 export function useTrips() {
-  const { user } = useAuth();
+  const { user } = useSafeAuth();
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);

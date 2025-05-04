@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 import { db } from "../lib/firebase";
 import { doc, getDoc } from "firebase/firestore";
@@ -12,7 +12,7 @@ interface TripData {
 }
 
 export function useTrip(id: string | undefined) {
-  const { user } = useAuth();
+  const { user } = useSafeAuth();
   const spotifyApi = useSpotifyApi();
   const [data, setData] = useState<TripData | null>(null);
   const [isLoading, setIsLoading] = useState(true);

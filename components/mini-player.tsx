@@ -6,11 +6,11 @@ import { BlurView } from "expo-blur";
 import { useEffect, useRef, useState } from "react";
 import Colors from "../constants/colors";
 import { usePlayerStore } from "../store/player-store";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 
 export default function MiniPlayer() {
   const router = useRouter();
-  const { isPremium, isAuthenticated } = useAuth();
+  const { isPremium, isAuthenticated } = useSafeAuth();
   const { 
     currentTrack, 
     isPlaying, 

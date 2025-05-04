@@ -11,11 +11,11 @@ import { useOpenAI } from "../hooks/use-openai";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { db } from "../lib/firebase";
 import { collection, addDoc } from "firebase/firestore";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 
 export default function CreateTripScreen() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user } = useSafeAuth();
   const { generateTripDescription, isLoading: isGeneratingDescription } = useOpenAI();
   
   const [destination, setDestination] = useState("");

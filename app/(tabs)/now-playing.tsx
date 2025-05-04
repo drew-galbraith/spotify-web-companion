@@ -8,12 +8,12 @@ import Colors from '../../constants/colors';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../context/auth-context';
+import { useSafeAuth } from '../../context/auth-context';
 import Slider from '@react-native-community/slider';
 
 export default function NowPlayingScreen() {
   const router = useRouter();
-  const { isPremium } = useAuth();
+  const { isPremium } = useSafeAuth();
   const { 
     currentTrack, 
     isPlaying, 

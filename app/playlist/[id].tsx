@@ -8,7 +8,7 @@ import Colors from "../../constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useTravelPlaylist } from "../../hooks/use-travel-playlist";
 import { usePlayerStore } from "../../store/player-store";
-import { useAuth } from "../../context/auth-context";
+import { useSafeAuth } from "../../context/auth-context";
 import LoadingScreen from "../../components/loading-screen";
 import ErrorView from "../../components/error-view";
 import { LinearGradient } from "expo-linear-gradient";
@@ -19,7 +19,7 @@ import PlayerControls from "../../components/player-controls";
 export default function PlaylistScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { isPremium } = useAuth();
+  const { isPremium } = useSafeAuth();
   const { data: playlist, isLoading, error } = useTravelPlaylist(id);
   const { 
     currentTrack, 

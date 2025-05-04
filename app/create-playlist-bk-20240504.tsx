@@ -11,10 +11,54 @@ import { useSpotifyApi } from "../hooks/use-spotify-api";
 import { useSpotifySearch } from "../hooks/use-spotify-search";
 import { useAutoPlaylist } from "../hooks/use-auto-playlist";
 import { useOpenAI } from "../hooks/use-openai";
-import { useAuth } from "../context/auth-context";
-import { addPlaylist } from "../lib/firestore-service";
-import { doc, updateDoc, arrayUnion, runTransaction } from "firebase/firestore";
+import { useSafeAuth } from "../context/auth-context";
+import { getAuth } from 'firebase/auth';
+import { doc, getDoc, collection, query, where, getDocs, addDoc, updateDoc, arrayUnion } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import { FirebaseError } from 'firebase/app';
+import { addPlaylistWithAutoUser } from "../lib/firestore-service";
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// First, let's add a test function to verify Firebase connectivity:
+const testFirebaseConnection = async (auth: any, db: any) => {
+  try {
+    console.log("Testing Firebase connection...");
+    console.log("Auth available:", !!auth);
+    console.log("DB available:", !!db);
+    console.log("Current user:", auth?.currentUser?.uid);
+    
+    if (auth?.currentUser?.uid) {
+      // Test reading a document
+      const testRef = doc(db, 'users', auth.currentUser.uid, 'trips', 'test');
+      console.log("Attempting to read test document...");
+      const testDoc = await getDoc(testRef);
+      console.log("Test document exists:", testDoc.exists());
+    }
+  } catch (error) {
+    console.error("Firebase test failed:", error);
+  }
+};
+
+// Add this function to create-playlist.tsx:
+const checkTripExists = async (tripId: string, userId: string) => {
+  try {
+    console.log(`Checking if trip exists: users/${userId}/trips/${tripId}`);
+    const tripRef = doc(db, 'users', userId, 'trips', tripId);
+    const tripDoc = await getDoc(tripRef);
+    
+    if (!tripDoc.exists()) {
+      console.error('Trip document does not exist in Firestore');
+      return false;
+    }
+    
+    console.log('Trip document data:', tripDoc.data());
+    return true;
+  } catch (error) {
+    console.error('Error checking trip existence:', error);
+    return false;
+  }
+};
 
 export default function CreatePlaylistScreen() {
   const router = useRouter();
@@ -23,7 +67,21 @@ export default function CreatePlaylistScreen() {
   const { results, isLoading: isSearchLoading, search, searchLocationMusic, findLocalArtists } = useSpotifySearch();
   const { createAutoPlaylist, isCreating: isAutoCreating, currentStep, progress } = useAutoPlaylist();
   const { generatePlaylistRecommendations, generateLocalArtists, isLoading: isGeneratingRecommendations } = useOpenAI();
-  const { spotifyToken, user } = useAuth();
+  
+  // Use the safe auth hook instead
+  const { spotifyToken, user } = useSafeAuth();
+  
+  // Get Firebase auth separately
+  const [firebaseUser, setFirebaseUser] = useState<any>(null);
+  
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setFirebaseUser(user);
+    });
+    
+    return () => unsubscribe();
+  }, []);
   
   const getTripById = useTripStore((state) => state.getTripById);
   const addPlaylistToTrip = useTripStore((state) => state.addPlaylistToTrip);
@@ -560,6 +618,18 @@ export default function CreatePlaylistScreen() {
   };
 
   const createPlaylist = async () => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+  
+    console.log("=== Starting createPlaylist ===");
+    console.log("Auth state:", {
+      hasAuth: !!auth,
+      hasUser: !!currentUser,
+      userId: currentUser?.uid,
+      tripId: tripId,
+      trip: trip
+    });
+    
     if (!playlistName.trim()) {
       Alert.alert("Missing Information", "Please enter a playlist name");
       return;
@@ -583,15 +653,25 @@ export default function CreatePlaylistScreen() {
       Alert.alert("Error", "Invalid trip ID");
       return;
     }
-
+    if (!currentUser?.uid) {
+      Alert.alert("Error", "User not authenticated");
+      return;
+    }
+  
     setIsCreating(true);
     setCreationStatus("Creating your playlist...");
     setCreationProgress(10);
-
+  
     try {
+      // First, verify the trip exists in Firestore
+      const tripExists = await checkTripExists(tripId, currentUser.uid);
+      if (!tripExists) {
+        throw new Error("Trip not found in database");
+      }
+  
       const meResponse = await fetchFromSpotify("/v1/me");
       const userId = meResponse.id;
-
+  
       const newPlaylist = await fetchFromSpotify(
         `/v1/users/${userId}/playlists`,
         {
@@ -604,11 +684,12 @@ export default function CreatePlaylistScreen() {
         }
       );
       setCreationProgress(30);
-
+  
       if (!newPlaylist?.id) {
         throw new Error("Failed to create Spotify playlist: No playlist ID returned");
       }
-
+  
+      // Add tracks to playlist...
       let trackUris = selectedTracks.map((t) => t.uri);
       if (useLocationBased) {
         trackUris = trackUris.concat(locationTracks.map((t) => t.uri));
@@ -617,7 +698,7 @@ export default function CreatePlaylistScreen() {
         trackUris = trackUris.concat(aiRecommendedTracks.map((t) => t.uri));
       }
       trackUris = Array.from(new Set(trackUris)).slice(0, 50);
-
+  
       if (trackUris.length > 0) {
         setCreationStatus("Adding tracks to your playlist...");
         setCreationProgress(60);
@@ -629,29 +710,103 @@ export default function CreatePlaylistScreen() {
           }
         );
       }
-
+  
       // Update local store
       addPlaylistToTrip(tripId, newPlaylist.id);
-
-      // Update Firestore with transaction
-      const tripRef = doc(db, "trips", tripId);
-      await runTransaction(db, async (transaction) => {
-        const tripDoc = await transaction.get(tripRef);
-        if (!tripDoc.exists()) {
-          throw new Error("Trip document does not exist!");
+      
+      // Save to Firebase
+      try {
+        setCreationStatus("Saving playlist to database...");
+        setCreationProgress(80);
+  
+        // Create playlist data for Firebase
+        const playlistData = {
+          name: playlistName,
+          spotifyId: newPlaylist.id,
+          description: description,
+          imageUrl: newPlaylist.images?.[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
+          trackCount: trackUris.length,
+          destination: trip?.destination || "",
+          countryCode: trip?.countryCode || "",
+          userId: currentUser.uid,
+          tripId: tripId,
+          isAutoGenerated: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        
+        console.log("Adding playlist to Firebase:", playlistData);
+        
+        // Add playlist to Firebase collection
+        const docRef = await addDoc(collection(db, "playlists"), playlistData);
+        console.log("Playlist added with ID:", docRef.id);
+        
+        // Update the trip document to reference this playlist
+        const tripRef = doc(db, 'users', currentUser.uid, 'trips', tripId);
+        const tripSnapshot = await getDoc(tripRef);
+        
+        if (tripSnapshot.exists()) {
+          const currentPlaylists = tripSnapshot.data().playlists || [];
+          
+          // Update trip with playlist reference
+          await updateDoc(tripRef, {
+            playlists: arrayUnion({
+              id: docRef.id,
+              spotifyId: newPlaylist.id,
+              name: playlistName
+            }),
+            updatedAt: new Date().toISOString()
+          });
+          
+          console.log("Updated trip with playlist reference");
+        } else {
+          console.error("Trip not found in Firestore (path might be wrong)");
+          // Try alternative path if needed
+          const altTripRef = doc(db, 'trips', tripId);
+          const altTripSnapshot = await getDoc(altTripRef);
+          
+          if (altTripSnapshot.exists()) {
+            await updateDoc(altTripRef, {
+              playlists: arrayUnion({
+                id: docRef.id,
+                spotifyId: newPlaylist.id,
+                name: playlistName
+              }),
+              updatedAt: new Date().toISOString()
+            });
+            console.log("Updated trip using alternative path");
+          } else {
+            throw new Error("Trip document not found in either path");
+          }
         }
-        const currentPlaylists = tripDoc.data().playlists || [];
-        transaction.update(tripRef, {
-          playlists: [...new Set([...currentPlaylists, newPlaylist.id])],
-          updatedAt: new Date().toISOString(),
-        });
-        console.log("Successfully updated Firestore with playlist ID:", newPlaylist.id);
-      });
-
+        
+      } catch (firebaseError) {
+        console.error("Error storing playlist in Firestore:", firebaseError);
+        
+        // Show more specific error to user
+        let errorMessage = "Failed to save to database.";
+        if (firebaseError instanceof Error) {
+          if (firebaseError.message.includes("not found")) {
+            errorMessage = `Trip not found. ID: ${tripId}`;
+          } else if (firebaseError.message.includes("permission")) {
+            errorMessage = "Database permission error.";
+          } else if (firebaseError.message.includes("initialized")) {
+            errorMessage = "Database connection error.";
+          } else {
+            errorMessage = `Error: ${firebaseError.message}`;
+          }
+        }
+        
+        Alert.alert(
+          "Warning", 
+          `Playlist created on Spotify but ${errorMessage}\n\nDebug: Check console for details.`
+        );
+      }
+  
       setCreationProgress(100);
       Alert.alert(
         "Playlist Created!",
-        `“${playlistName}” now has ${trackUris.length} tracks.`,
+        `"${playlistName}" now has ${trackUris.length} tracks.`,
         [
           {
             text: "View Playlist",
@@ -673,61 +828,113 @@ export default function CreatePlaylistScreen() {
       setCreationProgress(0);
     }
   };
+
+const handleCreateAutoPlaylist = async () => {
+  const auth = getAuth();
+  const currentUser = auth.currentUser;
   
-  const handleCreateAutoPlaylist = async () => {
-    if (!trip) return;
+  if (!trip) return;
+  
+  if (!currentUser?.uid) {
+    Alert.alert("Error", "User not authenticated");
+    return;
+  }
+  
+  try {
+    const result = await createAutoPlaylist(
+      tripId!,
+      trip.destination,
+      trip.description,
+      trip.name
+    );
     
-    try {
-      const result = await createAutoPlaylist(
-        tripId!,
-        trip.destination,
-        trip.description,
-        trip.name
-      );
+    if (result) {
+      // Update local store
+      addPlaylistToTrip(tripId!, result.id);
+
+      // Create playlist data for Firebase using the same structure as manual playlists
+      const playlistData = {
+        name: result.name,
+        spotifyId: result.id,
+        description: trip.description || `Music for my trip to ${trip.destination}`,
+        imageUrl: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
+        trackCount: result.trackCount,
+        destination: trip.destination,
+        countryCode: trip.countryCode || "",
+        userId: currentUser.uid,
+        tripId: tripId,
+        isAutoGenerated: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
       
-      if (result) {
-        // Update local store
-        addPlaylistToTrip(tripId!, result.id);
-
-        // Update Firestore with transaction
-        const tripRef = doc(db, "trips", tripId!);
-        await runTransaction(db, async (transaction) => {
-          const tripDoc = await transaction.get(tripRef);
-          if (!tripDoc.exists()) {
-            throw new Error("Trip document does not exist!");
+      try {
+        console.log("=== Auto Playlist Firebase Save ===");
+        console.log("Adding playlist to Firebase:", playlistData);
+        
+        // Add playlist to Firebase collection
+        const docRef = await addDoc(collection(db, "playlists"), playlistData);
+        console.log("Playlist added with ID:", docRef.id);
+        
+        // Update trip document to reference this playlist
+        if (tripId) {
+          const tripRef = doc(db, "trips", tripId);
+          const tripSnapshot = await getDoc(tripRef);
+          
+          if (tripSnapshot.exists()) {
+            const currentPlaylists = tripSnapshot.data().playlists || [];
+            
+            // Update trip with playlist reference
+            await updateDoc(tripRef, {
+              playlists: arrayUnion({
+                id: docRef.id,
+                spotifyId: result.id,
+                name: result.name
+              }),
+              updatedAt: new Date().toISOString()
+            });
+            
+            console.log("Updated trip with playlist reference");
+          } else {
+            console.error("Trip not found for auto playlist");
+            throw new Error("Trip not found in Firestore");
           }
-          const currentPlaylists = tripDoc.data().playlists || [];
-          transaction.update(tripRef, {
-            playlists: [...new Set([...currentPlaylists, result.id])],
-            updatedAt: new Date().toISOString(),
-          });
-          console.log("Successfully updated Firestore with auto playlist ID:", result.id);
-        });
+        }
+        
+        console.log("Successfully added playlist to Firestore");
 
+      } catch (firebaseError) {
+        console.error("Error storing auto playlist in Firestore:", firebaseError);
         Alert.alert(
-          "Auto Playlist Created",
-          `Your playlist "${result.name}" has been created with ${result.trackCount} tracks!`,
-          [
-            { 
-              text: "View Playlist", 
-              onPress: () => router.push(`/playlist/${result.id}`) 
-            },
-            { 
-              text: "Back to Trip", 
-              onPress: () => router.push(`/trip/${tripId}`) 
-            },
-          ]
+          "Warning", 
+          "Playlist created on Spotify but failed to save to database. Changes may not sync across devices."
         );
       }
-    } catch (error) {
-      console.error("Error creating auto playlist:", error);
+
       Alert.alert(
-        "Playlist Creation Failed",
-        "There was an error creating your playlist. Please try again later.",
-        [{ text: "OK" }]
+        "Auto Playlist Created",
+        `Your playlist "${result.name}" has been created with ${result.trackCount} tracks!`,
+        [
+          { 
+            text: "View Playlist", 
+            onPress: () => router.push(`/playlist/${result.id}`) 
+          },
+          { 
+            text: "Back to Trip", 
+            onPress: () => router.push(`/trip/${tripId}`) 
+          },
+        ]
       );
     }
-  };
+  } catch (error) {
+    console.error("Error creating auto playlist:", error);
+    Alert.alert(
+      "Playlist Creation Failed",
+      "There was an error creating your playlist. Please try again later.",
+      [{ text: "OK" }]
+    );
+  }
+};
 
   const renderTrackItem = ({ item }: { item: any }) => {
     const isSelected = selectedTracks.some(track => track.id === item.id);

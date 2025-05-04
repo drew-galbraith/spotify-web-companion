@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { useAuth } from "../context/auth-context";
+import { useSafeAuth } from "../context/auth-context";
 import { useSpotifyApi } from "./use-spotify-api";
 import { Alert } from "react-native";
 import { getAuth } from 'firebase/auth';
 
 export function useTravelPlaylist(id: string | undefined) {
-  const { user } = useAuth(); // Changed from token to user
+  const { user } = useSafeAuth(); // Changed from token to user
   const { fetchFromSpotify } = useSpotifyApi();
   const [data, setData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
