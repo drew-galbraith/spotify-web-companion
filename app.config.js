@@ -17,7 +17,8 @@ export default {
       "supportsTablet": true,
       "bundleIdentifier": "com.scubadrew0716.wandertunes",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSMicrophoneUsageDescription": "WanderTunes does not record audio, but the microphone permission is required by third-party playback services to function properly."
       }
     },
     "android": {
