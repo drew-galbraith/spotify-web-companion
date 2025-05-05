@@ -8,6 +8,9 @@ import Constants from 'expo-constants';
 import { Alert } from 'react-native';
 import { router } from 'expo-router';
 import { View, ActivityIndicator } from 'react-native';
+import { Platform } from 'react-native';
+
+
 
 // Ensure browser can handle auth redirects
 WebBrowser.maybeCompleteAuthSession();
@@ -45,6 +48,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Get from constants
   const clientId = Constants.expoConfig?.extra?.spotifyClientId || '14457edd9cd944a08d5d1bcac2371875';
+  
+  // Get the scheme from your app.json
+  const SCHEME = Constants.manifest.scheme || 'wandertunes';
   
   // Add this helper function to check if token is expired
   const isTokenExpired = () => {
@@ -107,10 +113,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Use the auto-detected redirect URI from Expo
-  const redirectUri = AuthSession.makeRedirectUri();
-  
-  console.log("Current redirect URI:", redirectUri);
-  
+  const redirectUri = AuthSession.makeRedirectUri({
+    //For standalone apps, use the scheme defined in app.json
+    scheme: SCHEME,
+    path: 'redirect'
+  });
+  console.log('➡️ redirectUri =', redirectUri);
+    
   // Spotify API endpoints
   const discovery = {
     authorizationEndpoint: 'https://accounts.spotify.com/authorize',
@@ -333,6 +342,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             },
             discovery
           );
+
+          //Then when you want to prompt the user for authentication, use the following:
+          // const handleLogin = async () => {
+          //   promptAsync({
+          //     useProxy: Constants.appOwnership === 'expo',
+          //   });
+          // };
           
           console.log('Token exchange successful');
           const accessToken = tokenResult.accessToken;
