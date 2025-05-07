@@ -117,7 +117,7 @@ export default function NowPlayingScreen() {
   const handlePlayPause = async () => {
     try {
       if (isPlaying) {
-        pauseTrack();
+        await pauseTrack();
         return;
       }
 
@@ -131,17 +131,20 @@ export default function NowPlayingScreen() {
       if (isPlayable) {
         resumeTrack();
       } else {
-        // No preview available, show options
-        Alert.alert(
-          isPremium ? 'Full Track Not Available' : 'Premium Required',
-          isPremium ? 
-            'This track cannot be played in the app. Would you like to open it in Spotify?' :
-            'Full track playback requires a Spotify Premium account. You can play the preview or open in Spotify.',
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Open Spotify', onPress: handleOpenInSpotify }
-          ]
-        );
+
+        // If we've already loaded an Audio.Sound, just resume...
+        const { sound } = usePlayerStore.getState();
+        if (sound) {
+          await resumeTrack();
+          return;
+        }
+
+        // otherwise start fresh playback
+        await playTrack({
+          ...currentTrack,
+          // optionally pass playlistId/Name here
+        });
+        return;
       }
     } catch (error) {
       console.error('Error in handlePlayPause:', error);

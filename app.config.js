@@ -45,9 +45,6 @@ export default {
     },
     plugins: [
       [
-        'expo-auth-session'
-      ],
-      [
         'expo-router',
         {
           origin: 'https://info.wandertunes.app/'

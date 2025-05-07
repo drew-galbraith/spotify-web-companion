@@ -50,8 +50,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clientId = Constants.expoConfig?.extra?.spotifyClientId || '14457edd9cd944a08d5d1bcac2371875';
   
   // Get the scheme from your app.json
-  const SCHEME = Constants.manifest.scheme || 'wandertunes';
-  
+  const SCHEME =
+  // 1) Try the new EAS/bare value
+  Constants.expoConfig?.scheme ??
+  // 2) Fallback to the old “manifest” (Expo Go / SDK < 47)
+  Constants.manifest?.scheme ??
+  // 3) Last-ditch fallback
+  'wandertunes';
+    
   // Add this helper function to check if token is expired
   const isTokenExpired = () => {
     if (!tokenExpiresAt) return false;

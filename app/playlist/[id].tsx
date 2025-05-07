@@ -1,25 +1,28 @@
 
-import { useLocalSearchParams } from "expo-router";
-import { StyleSheet, Text, View, TouchableOpacity, FlatList, ActivityIndicator, Platform, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { StatusBar } from "expo-status-bar";
-import { Image } from "expo-image";
-import { useRouter } from "expo-router";
-import Colors from "../../constants/colors";
-import { Ionicons } from "@expo/vector-icons";
-import { usePlayerStore } from "../../store/player-store";
-import { useSafeAuth } from "../../context/auth-context";
-import LoadingScreen from "../../components/loading-screen";
-import ErrorView from "../../components/error-view";
-import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState } from "react";
-import TrackListItem from "../../components/track-list-item";
-import PlayerControls from "../../components/player-controls";
-import { useSpotifyApi } from "../../hooks/use-spotify-api";
-import { getDoc, doc } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import {
+  StyleSheet, Text, View, TouchableOpacity,
+  FlatList, ActivityIndicator, Platform, Alert
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Image } from 'expo-image';
+import { useRouter } from 'expo-router';
+import Colors from '../../constants/colors';
+import { Ionicons } from '@expo/vector-icons';
+import { usePlayerStore } from '../../store/player-store';
+import { useSafeAuth } from '../../context/auth-context';
+import LoadingScreen from '../../components/loading-screen';
+import ErrorView from '../../components/error-view';
+import { LinearGradient } from 'expo-linear-gradient';
+import TrackListItem from '../../components/track-list-item';
+import PlayerControls from '../../components/player-controls';
+import { useSpotifyApi } from '../../hooks/use-spotify-api';
+import { getDoc, doc } from 'firebase/firestore';
+import { db } from '../../lib/firebase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Linking from "expo-linking";
+import * as Linking from 'expo-linking';
 
 interface PlaylistTrack {
   id: string;
@@ -48,480 +51,142 @@ export default function PlaylistScreen() {
   const router = useRouter();
   const { isPremium, user } = useSafeAuth();
   const { fetchFromSpotify } = useSpotifyApi();
-  
-  // Add local state for saved tracks
-  const [savedTracks, setSavedTracks] = useState<{ [key: string]: boolean }>({});
-  const [isPlaylistSaved, setIsPlaylistSaved] = useState(false);
-  const [isSavingPlaylist, setIsSavingPlaylist] = useState(false);
 
-  // Add local state for playlist data
   const [playlist, setPlaylist] = useState<PlaylistData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  const { 
-    currentTrack, 
-    isPlaying, 
+
+  // Player store
+  const {
+    currentTrack,
+    isPlaying,
     isLoading: isPlayerLoading,
-    playTrack, 
-    pauseTrack,
-    openInSpotify,
-    // Web Playback SDK methods
-    initWebPlayer,
-    connectWebPlayer,
-    webPlayerReady,
-    // Spotify Connect methods
-    isSpotifyConnectActive,
-    toggleSpotifyConnectActive,
-    fetchSpotifyDevices,
-    spotifyDevices,
-    activeDevice
+    playTrack,
+    pauseTrack
   } = usePlayerStore();
 
-  const [showDevices, setShowDevices] = useState(false);
-
-  // Fetch saved status for all tracks in batch
+  // Fetch playlist
   useEffect(() => {
-    const checkTracksSaved = async () => {
-      if (!playlist?.tracks || playlist.tracks.length === 0) return;
-      
-      // Spotify API supports checking up to 50 tracks at once
-      const batchSize = 50;
-      const trackIds = playlist.tracks.map(track => track.id);
-      const batches = [];
-      
-      for (let i = 0; i < trackIds.length; i += batchSize) {
-        batches.push(trackIds.slice(i, i + batchSize));
-      }
-      
-      try {
-        const results = await Promise.all(
-          batches.map(async (batch) => {
-            try {
-              const response = await fetchFromSpotify(`/v1/me/tracks/contains?ids=${batch.join(',')}`);
-              return response || [];
-            } catch (error) {
-              console.error('Error checking batch of tracks:', error);
-              return Array(batch.length).fill(false);
-            }
-          })
-        );
-        
-        // Combine results into a map
-        const savedStateMap: { [key: string]: boolean } = {};
-        let index = 0;
-        
-        results.forEach(batchResult => {
-          if (Array.isArray(batchResult)) {
-            batchResult.forEach(isSaved => {
-              const trackId = trackIds[index];
-              if (trackId) {
-                savedStateMap[trackId] = isSaved;
-              }
-              index++;
-            });
-          }
-        });
-        
-        setSavedTracks(savedStateMap);
-      } catch (error) {
-        console.error('Error checking saved tracks:', error);
-      }
-    };
-    
-    checkTracksSaved();
-  }, [playlist?.tracks]);
-
-  // Check if playlist is followed by current user
-  useEffect(() => {
-    const checkPlaylistFollow = async () => {
-      if (!playlist?.spotifyId || !user?.id) return;
-      
-      try {
-        const response = await fetchFromSpotify(`/v1/playlists/${playlist.spotifyId}/followers/contains?ids=${user.id}`);
-        if (Array.isArray(response) && response.length > 0) {
-          setIsPlaylistSaved(response[0]);
-        }
-      } catch (error) {
-        console.error('Error checking if playlist is followed:', error);
-      }
-    };
-    
-    checkPlaylistFollow();
-  }, [playlist?.spotifyId, user?.id]);
-
-  // Handle favorite toggle
-  const handleToggleFavorite = (trackId: string, newState: boolean) => {
-    setSavedTracks(prev => ({
-      ...prev,
-      [trackId]: newState
-    }));
-  };
-
-  // Handle playlist follow/unfollow
-  const togglePlaylistSaved = async () => {
-    if (!playlist?.spotifyId || isSavingPlaylist) return;
-    
-    setIsSavingPlaylist(true);
-    try {
-      const method = isPlaylistSaved ? 'DELETE' : 'PUT';
-      
-      const response = await fetch(`https://api.spotify.com/v1/playlists/${playlist.spotifyId}/followers`, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${await AsyncStorage.getItem('spotify_token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (response.ok || response.status === 200 || response.status === 204) {
-        setIsPlaylistSaved(!isPlaylistSaved);
-      } else {
-        console.error('Failed to toggle playlist saved status:', response.status);
-      }
-    } catch (error) {
-      console.error('Error toggling playlist saved status:', error);
-    } finally {
-      setIsSavingPlaylist(false);
-    }
-  };
-
-  // Ensure the player is visible when viewing a playlist
-  useEffect(() => {
-    const fetchPlaylistData = async () => {
+    async function load() {
       try {
         setIsLoading(true);
-        
-        // First, get the playlist document from Firebase
-        const playlistDoc = await getDoc(doc(db, "playlists", id));
-        
-        if (!playlistDoc.exists()) {
-          throw new Error("Playlist not found");
-        }
-        
-        const firebaseData = playlistDoc.data();
-        const spotifyId = firebaseData.spotifyId;
-        
-        if (!spotifyId) {
-          throw new Error("Spotify ID not found for this playlist");
-        }
-        
-        // Fetch data from Spotify
-        const [spotifyPlaylist, tracksData] = await Promise.all([
-          fetchFromSpotify(`/v1/playlists/${spotifyId}?fields=id,name,description,images,uri,tracks.total`),
-          fetchFromSpotify(`/v1/playlists/${spotifyId}/tracks?fields=items(track(id,name,artists,album(name,images),duration_ms,preview_url,uri))`)
-        ]);
-        
-        if (!spotifyPlaylist) {
-          throw new Error("Failed to fetch playlist from Spotify");
-        }
-        
-        // Transform tracks data
-        const tracks: PlaylistTrack[] = tracksData?.items
-          ?.filter((item: any) => item.track && !item.track.is_local)
-          .map((item: any) => {
-            const track = item.track;
-            return {
-              id: track.id,
-              name: track.name,
-              artists: track.artists.map((a: any) => a.name),
-              albumName: track.album.name,
-              albumImageUrl: track.album.images[0]?.url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww",
-              duration_ms: track.duration_ms,
-              preview_url: track.preview_url,
-              uri: track.uri
-            };
-          }) || [];
-        
-        // Combine data
-        const playlistData: PlaylistData = {
-          id: id,
-          name: spotifyPlaylist.name,
-          imageUrl: spotifyPlaylist.images?.[0]?.url || firebaseData.imageUrl,
-          trackCount: spotifyPlaylist.tracks?.total || tracks.length,
-          tracks: tracks,
-          uri: spotifyPlaylist.uri,
-          location: firebaseData.destination || firebaseData.location,
-          spotifyId: spotifyId
-        };
-        
-        setPlaylist(playlistData);
-        
-        // Show player when playlist loads
-        if (playlistData) {
-          usePlayerStore.getState().showPlayer();
-        }
-        
-      } catch (err) {
-        console.error("Error fetching playlist:", err);
-        setError(err instanceof Error ? err.message : "Failed to load playlist");
+        const docSnap = await getDoc(doc(db, 'playlists', id));
+        if (!docSnap.exists()) throw new Error('Playlist not found');
+        const data = docSnap.data();
+        const spotifyId = data.spotifyId as string;
+        const pl = await fetchFromSpotify(`/v1/playlists/${spotifyId}?fields=id,name,images,uri,tracks.total`);
+        const trResp = await fetchFromSpotify(
+          `/v1/playlists/${spotifyId}/tracks?fields=items(track(id,name,artists,album(name,images),duration_ms,preview_url,uri))`
+        );
+        const items = Array.isArray(trResp.items) ? trResp.items : [];
+        const tracks: PlaylistTrack[] = items
+          .map((item: any) => item.track)
+          .filter((t: any) => t && !t.is_local)
+          .map((t: any) => ({
+            id: t.id,
+            name: t.name,
+            artists: t.artists.map((a: any) => a.name),
+            albumName: t.album.name,
+            albumImageUrl: t.album.images[0]?.url || '',
+            duration_ms: t.duration_ms,
+            preview_url: t.preview_url,
+            uri: t.uri
+          }));
+        setPlaylist({
+          id,
+          name: pl.name,
+          imageUrl: pl.images?.[0]?.url || data.imageUrl,
+          trackCount: pl.tracks.total,
+          tracks,
+          uri: pl.uri,
+          location: data.destination || data.location,
+          spotifyId
+        });
+      } catch (e: any) {
+        setError(e.message);
       } finally {
         setIsLoading(false);
       }
-    };
-    
-    if (id) {
-      fetchPlaylistData();
     }
+    if (id) load();
   }, [id]);
 
-  // Initialize Web Playback SDK on web platform
-  useEffect(() => {
-    if (Platform.OS === 'web' && isPremium) {
-      const setupWebPlayer = async () => {
-        await initWebPlayer();
-        await connectWebPlayer();
-      };
-      
-      setupWebPlayer();
-    }
-  }, [isPremium]);
-
-  // Fetch Spotify devices for iOS
-  useEffect(() => {
-    if (Platform.OS === 'ios' && isPremium) {
-      fetchSpotifyDevices();
-    }
-  }, [isPremium]);
-
-  if (isLoading) {
-    return <LoadingScreen />;
-  }
-
-  if (error || !playlist) {
-    return <ErrorView message="Failed to load playlist" />;
-  }
-
-  const handlePlayPause = async () => {
-    if (!playlist?.tracks || playlist.tracks.length === 0) return;
-
-    // Check if the first track of this playlist is currently playing
-    const isPlayingThisPlaylist = currentTrack?.id === playlist.tracks[0].id;
-    
-    if (isPlaying && isPlayingThisPlaylist) {
-      // Pause the current track
-      pauseTrack();
-    } else {
-      // Play the first track of the playlist
-      const firstTrack = playlist.tracks[0];
-      const trackWithPlaylistInfo: PlaylistTrack & { playlistId?: string; playlistName?: string } = {
-        ...firstTrack,
-        playlistId: playlist.id,
-        playlistName: playlist.name
-      };
-      playTrack(trackWithPlaylistInfo);
-    }
+  // Play/pause handlers
+  const firstTrack = playlist?.tracks[0];
+  const isPlayingFirst = Boolean(firstTrack && isPlaying && currentTrack?.id === firstTrack.id);
+  const handlePlayPause = () => {
+    if (!firstTrack) return;
+    if (isPlayingFirst) pauseTrack();
+    else playTrack({ ...firstTrack, playlistId: playlist!.id, playlistName: playlist!.name });
   };
 
-  const handleTrackPress = (track: any) => {
-    const trackWithPlaylistInfo = {
-      ...track,
-      playlistId: playlist?.id,
-      playlistName: playlist?.name
-    };
-    playTrack(trackWithPlaylistInfo);
+  const handleTrackPress = (track: PlaylistTrack) => {
+    playTrack({ ...track, playlistId: playlist!.id, playlistName: playlist!.name });
   };
 
   const handleOpenInSpotify = async () => {
-    if (playlist.uri) {
-      // For mobile platforms, open the Spotify app
-      if (Platform.OS !== 'web') {
-        try {
-          const spotifyUrl = `spotify:playlist:${playlist.uri.split(':')[2]}`;
-          const canOpen = await Linking.canOpenURL(spotifyUrl);
-          
-          if (canOpen) {
-            await Linking.openURL(spotifyUrl);
-            console.log('Opened playlist in Spotify app');
-          } else {
-            // If Spotify app is not installed, open in browser
-            const webUrl = `https://open.spotify.com/playlist/${playlist.uri.split(':')[2]}`;
-            await Linking.openURL(webUrl);
-            console.log('Opened playlist in browser');
-          }
-        } catch (error) {
-          console.error('Error opening Spotify:', error);
-          Alert.alert('Error', 'Failed to open Spotify');
-        }
-      }
-    }
+    if (!playlist) return;
+    const parts = playlist.uri.split(':');
+    const link = Platform.OS === 'web'
+      ? `https://open.spotify.com/playlist/${parts[2]}`
+      : `spotify:playlist:${parts[2]}`;
+    const can = await Linking.canOpenURL(link);
+    if (can) await Linking.openURL(link);
   };
 
-  const handleDevicePress = () => {
-    setShowDevices(!showDevices);
-    fetchSpotifyDevices();
-  };
-
-  const handleDeviceSelect = (deviceId: string) => {
-    usePlayerStore.getState().transferPlayback(deviceId);
-    setShowDevices(false);
-  };
-
-  // Find the first playable track
-  const firstPlayableTrack = playlist.tracks && playlist.tracks.length > 0 ? 
-    playlist.tracks.find(track => 
-      Platform.OS === 'web' ? 
-        (webPlayerReady && isPremium && track.uri) || track.preview_url : 
-        Platform.OS === 'ios' ?
-        (isSpotifyConnectActive && isPremium && track.uri) || track.preview_url :
-        track.preview_url
-    ) : null;
-
-  // Check if the current track is from this playlist
-  const isPlayingFromThisPlaylist = currentTrack?.playlistId === playlist.id;
+  if (isLoading) return <LoadingScreen />;
+  if (error || !playlist) return <ErrorView message="Failed to load playlist" />;
 
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
-        <LinearGradient
-          colors={[Colors.gradientStart, Colors.gradientEnd]}
-          style={styles.header}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
-        >
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <LinearGradient colors={[Colors.gradientStart, Colors.gradientEnd]} style={styles.header}>
           <View style={styles.headerContent}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color={Colors.text} />
             </TouchableOpacity>
-            
             <View style={styles.playlistInfo}>
-              <Image
-                source={{ uri: playlist.imageUrl }}
-                style={styles.playlistImage}
-                contentFit="cover"
-              />
-              
+              <Image source={{ uri: playlist.imageUrl }} style={styles.playlistImage} contentFit="cover" />
               <View style={styles.playlistDetails}>
                 <Text style={styles.playlistName}>{playlist.name}</Text>
-                <View style={styles.playlistMeta}>
-                  <Ionicons name="location-outline" size={16} color={Colors.textSecondary} style={styles.metaIcon} />
-                  <Text style={styles.playlistLocation}>{playlist.location || "Travel Playlist"}</Text>
-                </View>
-                <View style={styles.playlistMeta}>
-                  <Ionicons name="musical-notes-outline" size={16} color={Colors.textSecondary} style={styles.metaIcon} />
-                  <Text style={styles.playlistTrackCount}>{playlist.tracks ? playlist.tracks.length : 0} tracks</Text>
-                </View>
-                
-                {Platform.OS === 'ios' && isSpotifyConnectActive && activeDevice && (
-                  <View style={styles.playlistMeta}>
-                    <Ionicons name="phone-portrait-outline" size={16} color={Colors.accent} style={styles.metaIcon} />
-                    <Text style={styles.playlistDevice}>Playing on: {activeDevice.name}</Text>
-                  </View>
-                )}
+                <Text style={styles.playlistTrackCount}>{playlist.tracks.length} tracks</Text>
               </View>
             </View>
-            
             <View style={styles.playlistActions}>
-              <TouchableOpacity 
-                style={[
-                  styles.playButton,
-                  (!firstPlayableTrack || isPlayerLoading) && styles.disabledButton
-                ]}
-                onPress={handlePlayPause}
-                disabled={!firstPlayableTrack || isPlayerLoading}
-              >
-                {isPlayerLoading ? (
-                  <ActivityIndicator size="small" color={Colors.text} />
-                ) : isPlaying && isPlayingFromThisPlaylist && currentTrack?.id === playlist.tracks[0]?.id ? (
-                  <Ionicons name="pause" size={24} color={Colors.text} />
-                ) : (
-                  <Ionicons name="play" size={24} color={Colors.text} />
-                )}
+              <TouchableOpacity onPress={handlePlayPause} style={[styles.playButton, (!firstTrack || isPlayerLoading) && styles.disabledButton]} disabled={!firstTrack || isPlayerLoading}>
+                {isPlayerLoading
+                  ? <ActivityIndicator color={Colors.text} />
+                  : isPlayingFirst
+                    ? <Ionicons name="pause" size={24} color={Colors.text} />
+                    : <Ionicons name="play" size={24} color={Colors.text} />}
               </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.heartButton}
-                onPress={togglePlaylistSaved}
-                disabled={isSavingPlaylist}
-              >
-                {isSavingPlaylist ? (
-                  <ActivityIndicator size="small" color={isPlaylistSaved ? '#1DB954' : Colors.textSecondary} />
-                ) : (
-                  <Ionicons 
-                    name={isPlaylistSaved ? "heart" : "heart-outline"} 
-                    size={24} 
-                    color={isPlaylistSaved ? '#1DB954' : Colors.textSecondary}
-                  />
-                )}
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={styles.spotifyButton}
-                onPress={handleOpenInSpotify}
-              >
+              <TouchableOpacity onPress={handleOpenInSpotify} style={styles.spotifyButton}>
                 <Ionicons name="open-outline" size={20} color={Colors.text} />
               </TouchableOpacity>
-              
-              {Platform.OS === 'ios' && isPremium && (
-                <TouchableOpacity 
-                  style={styles.deviceButton}
-                  onPress={handleDevicePress}
-                >
-                  <Ionicons name="phone-portrait-outline" size={20} color={Colors.text} />
-                </TouchableOpacity>
-              )}
             </View>
-            
-            {/* Device selection dropdown for iOS */}
-            {Platform.OS === 'ios' && showDevices && spotifyDevices.length > 0 && (
-              <View style={styles.devicesDropdown}>
-                <Text style={styles.devicesTitle}>Available Devices</Text>
-                {spotifyDevices.map(device => (
-                  <TouchableOpacity 
-                    key={device.id}
-                    style={[
-                      styles.deviceItem,
-                      device.is_active && styles.activeDeviceItem
-                    ]}
-                    onPress={() => handleDeviceSelect(device.id)}
-                  >
-                    <Text style={styles.deviceName}>{device.name}</Text>
-                    <Text style={styles.deviceType}>{device.type}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-            
-            {/* Progress bar for iOS Spotify Connect */}
-            {Platform.OS === 'ios' && isSpotifyConnectActive && isPlaying && isPlayingFromThisPlaylist && (
-              <View style={styles.progressContainer}>
-                <PlayerControls compact={true} showProgress={true} />
-              </View>
-            )}
           </View>
         </LinearGradient>
-        
         <FlatList
-          data={playlist.tracks || []}
+          data={playlist.tracks}
           keyExtractor={(item) => item.id}
           renderItem={({ item, index }) => (
             <TrackListItem
               track={item}
               index={index}
               onPress={() => handleTrackPress(item)}
-              savedTracks={savedTracks}
-              onToggleFavorite={handleToggleFavorite}
-              showIndex={true}
-              showArtwork={true}
+              showIndex
+              showArtwork
             />
           )}
-          ListHeaderComponent={
-            <View style={styles.listHeader}>
-              <View style={styles.listHeaderRow}>
-                <Text style={styles.listHeaderNumber}>#</Text>
-                <Text style={styles.listHeaderTitle}>TITLE</Text>
-                <Ionicons name="time-outline" size={16} color={Colors.textSecondary} />
-              </View>
-              <View style={styles.divider} />
-            </View>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No tracks in this playlist</Text>
-            </View>
-          }
           contentContainerStyle={styles.listContent}
+        />
+        <PlayerControls
+          compact
+          showProgress
+          isPlaying={isPlaying}
+          onPlay={handlePlayPause}
+          onPause={pauseTrack}
         />
       </SafeAreaView>
     </View>
@@ -529,190 +194,19 @@ export default function PlaylistScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-  headerContent: {
-    gap: 20,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
-    borderRadius: 20,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-  },
-  playlistInfo: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 16,
-  },
-  playlistImage: {
-    width: 120,
-    height: 120,
-    borderRadius: 8,
-  },
-  playlistDetails: {
-    flex: 1,
-  },
-  playlistName: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: Colors.text,
-    marginBottom: 8,
-  },
-  playlistMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  metaIcon: {
-    marginRight: 6,
-  },
-  playlistLocation: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  playlistTrackCount: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  playlistDevice: {
-    fontSize: 14,
-    color: Colors.accent,
-    fontWeight: "500",
-  },
-  playlistActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
-  },
-  playButton: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  disabledButton: {
-    backgroundColor: Colors.secondary,
-    opacity: 0.7,
-  },
-  heartButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginHorizontal: 12,
-  },
-  spotifyButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#1DB954', // Spotify green
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  deviceButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.cardBackground,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  listHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 8,
-  },
-  listHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  listHeaderNumber: {
-    width: 30,
-    fontSize: 14,
-    fontWeight: "500",
-    color: Colors.textSecondary,
-  },
-  listHeaderTitle: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: "500",
-    color: Colors.textSecondary,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.divider,
-    marginTop: 8,
-  },
-  listContent: {
-    paddingBottom: 100, // Extra space for player
-  },
-  emptyContainer: {
-    padding: 20,
-    alignItems: "center",
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-  },
-  devicesDropdown: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  devicesTitle: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.text,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  deviceItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    marginVertical: 2,
-  },
-  activeDeviceItem: {
-    backgroundColor: Colors.primary + '40', // Add transparency
-  },
-  deviceName: {
-    fontSize: 14,
-    color: Colors.text,
-    fontWeight: "500",
-  },
-  deviceType: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-  },
-  progressContainer: {
-    marginTop: 8,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  safeArea: { flex: 1 },
+  header: { paddingHorizontal: 20, paddingTop: 20, paddingBottom: 30 },
+  headerContent: { gap: 20 },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center', borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.3)' },
+  playlistInfo: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  playlistImage: { width: 120, height: 120, borderRadius: 8 },
+  playlistDetails: { flex: 1 },
+  playlistName: { fontSize: 24, fontWeight: 'bold', color: Colors.text, marginBottom: 8 },
+  playlistTrackCount: { fontSize: 14, color: Colors.textSecondary },
+  playlistActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
+  playButton: { width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center' },
+  disabledButton: { backgroundColor: Colors.secondary, opacity: 0.7 },
+  spotifyButton: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#1DB954', justifyContent: 'center', alignItems: 'center', marginLeft: 12 },
+  listContent: { paddingBottom: 100 }
 });

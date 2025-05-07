@@ -1,5 +1,14 @@
+
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Platform, Animated } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+  Animated
+} from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import Colors from '../constants/colors';
@@ -28,83 +37,60 @@ interface TrackListItemProps {
   onToggleFavorite?: (trackId: string, newState: boolean) => void;
 }
 
-// iOS-style Playing Animation component
-const PlayingAnimation = () => {
+const PlayingAnimation: React.FC = () => {
   const bar1 = useRef(new Animated.Value(8)).current;
   const bar2 = useRef(new Animated.Value(12)).current;
   const bar3 = useRef(new Animated.Value(10)).current;
   const bar4 = useRef(new Animated.Value(6)).current;
 
   useEffect(() => {
-    const createAnimation = (value: Animated.Value, minHeight: number, maxHeight: number, duration: number) => {
-      return Animated.sequence([
-        Animated.timing(value, {
-          toValue: maxHeight,
-          duration: duration / 2,
-          useNativeDriver: false,
-        }),
-        Animated.timing(value, {
-          toValue: minHeight,
-          duration: duration / 2,
-          useNativeDriver: false,
-        }),
+    const createAnimation = (value: Animated.Value, min: number, max: number, duration: number) =>
+      Animated.sequence([
+        Animated.timing(value, { toValue: max, duration: duration / 2, useNativeDriver: false }),
+        Animated.timing(value, { toValue: min, duration: duration / 2, useNativeDriver: false })
       ]);
-    };
 
-    const runAnimation = () => {
-      Animated.parallel([
-        Animated.loop(createAnimation(bar1, 4, 12, 800), { iterations: -1 }),
-        Animated.loop(createAnimation(bar2, 6, 14, 900), { iterations: -1 }),
-        Animated.loop(createAnimation(bar3, 5, 12, 850), { iterations: -1 }),
-        Animated.loop(createAnimation(bar4, 3, 10, 750), { iterations: -1 }),
-      ]).start();
-    };
-
-    runAnimation();
+    Animated.parallel([
+      Animated.loop(createAnimation(bar1, 4, 12, 800), { iterations: -1 }),
+      Animated.loop(createAnimation(bar2, 6, 14, 900), { iterations: -1 }),
+      Animated.loop(createAnimation(bar3, 5, 12, 850), { iterations: -1 }),
+      Animated.loop(createAnimation(bar4, 3, 10, 750), { iterations: -1 })
+    ]).start();
   }, []);
 
   return (
     <View style={styles.playingAnimation}>
-      <Animated.View style={[styles.bar, { height: bar1 }]} />
-      <Animated.View style={[styles.bar, { height: bar2 }]} />
-      <Animated.View style={[styles.bar, { height: bar3 }]} />
-      <Animated.View style={[styles.bar, { height: bar4 }]} />
+      {[bar1, bar2, bar3, bar4].map((bar, idx) => (
+        <Animated.View key={idx} style={[styles.bar, { height: bar }]} />
+      ))}
     </View>
   );
 };
 
-export default function TrackListItem({ 
-  track, 
-  index, 
-  showArtwork = true, 
+export default function TrackListItem({
+  track,
+  index,
+  showArtwork = true,
   showIndex = false,
-  onPress 
+  onPress
 }: TrackListItemProps) {
-  const { 
-    currentTrack, 
-    isPlaying, 
+  const {
+    currentTrack,
+    isPlaying,
     isLoading,
-    playTrack,
-    webPlayerReady
+    playTrack
   } = usePlayerStore();
 
   const isActiveTrack = currentTrack?.id === track.id;
-  
-  // Determine if the track is playable
   const hasPreview = !!track.preview_url;
-  const hasUri = !!track.uri;
-  const isPlayable = Platform.OS === 'web' ? 
-    (webPlayerReady && hasUri) || hasPreview : 
-    hasPreview;
 
   const handlePress = () => {
     if (onPress) {
       onPress();
     } else {
-      // Ensure albumImageUrl is always defined
       const trackWithDefaults: Track = {
         ...track,
-        albumImageUrl: track.albumImageUrl || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=800&auto=format&fit=crop&q=60&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8MTJ8fGFsYnVtfGVufDB8fDB8fHww"
+        albumImageUrl: track.albumImageUrl || ''
       };
       playTrack(trackWithDefaults);
     }
@@ -116,23 +102,22 @@ export default function TrackListItem({
     return `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
   };
 
-  // Accessibility label based on track state
-  const accessibilityLabel = `${track.name} by ${track.artists.join(", ")}. Duration ${formatDuration(track.duration_ms)}. ${
-    isActiveTrack ? (isPlaying ? 'Now playing' : 'Paused') : ''
-  }${isPlayable ? '' : 'Not available for preview'}`;
+  const accessibilityLabel = `${track.name} by ${track.artists.join(', ')}. Duration ${formatDuration(
+    track.duration_ms
+  )}.${isActiveTrack ? (isPlaying ? ' Now playing' : ' Paused') : ''}`;
 
   return (
-    <TouchableOpacity 
-      style={[styles.container, isActiveTrack && styles.activeContainer]} 
+    <TouchableOpacity
+      style={[styles.container, isActiveTrack && styles.activeContainer]}
       onPress={handlePress}
       activeOpacity={0.7}
       disabled={isLoading && isActiveTrack}
-      accessible={true}
+      accessible
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ 
+      accessibilityState={{
         selected: isActiveTrack,
-        busy: isLoading && isActiveTrack 
+        busy: isLoading && isActiveTrack
       }}
     >
       {showIndex && index !== undefined && (
@@ -146,39 +131,31 @@ export default function TrackListItem({
           )}
         </View>
       )}
-      
+
       {showArtwork && (
         <View style={[styles.artworkContainer, isActiveTrack && styles.activeArtworkContainer]}>
-          <Image 
-            source={{ uri: track.albumImageUrl }} 
-            style={styles.artwork} 
+          <Image
+            source={{ uri: track.albumImageUrl }}
+            style={styles.artwork}
             contentFit="cover"
-            accessible={true}
+            accessible
             accessibilityRole="image"
             accessibilityLabel={`Album cover for ${track.albumName || track.name}`}
           />
         </View>
       )}
-      
+
       <View style={styles.info}>
         <View style={styles.nameContainer}>
-          <Text 
-            style={[styles.name, isActiveTrack && styles.activeText]} 
-            numberOfLines={1}
-          >
+          <Text style={[styles.name, isActiveTrack && styles.activeText]} numberOfLines={1}>
             {track.name}
           </Text>
-          {Platform.OS === 'web' && webPlayerReady && hasUri && (
-            <Text style={styles.fullTrackTag}>Full Track</Text>
-          )}
         </View>
-        <Text 
-          style={[styles.artist, isActiveTrack && styles.activeSubtext]} 
-          numberOfLines={1}
-        >
-          {track.artists.join(", ")}
+        <Text style={[styles.artist, isActiveTrack && styles.activeSubtext]} numberOfLines={1}>
+          {track.artists.join(', ')}
         </Text>
       </View>
+
       <View style={styles.rightContainer}>
         <Text style={[styles.duration, isActiveTrack && styles.activeText]}>
           {formatDuration(track.duration_ms)}
@@ -195,107 +172,80 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(255, 255, 255, 0.08)',
-    backgroundColor: 'transparent',
+    borderBottomColor: 'rgba(255,255,255,0.08)'
   },
   activeContainer: {
-    backgroundColor: 'rgba(139, 92, 246, 0.05)',
+    backgroundColor: 'rgba(139,92,246,0.05)'
   },
   indexContainer: {
     width: 32,
     height: 32,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'center'
   },
   playingAnimation: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     height: 12,
-    width: 16,
+    width: 16
   },
   bar: {
     width: 3,
     backgroundColor: Colors.primary,
     borderRadius: 1.5,
-    marginRight: 1,
+    marginRight: 1
   },
   index: {
     fontSize: 15,
     color: Colors.textSecondary,
-    textAlign: 'center',
     fontWeight: '500',
+    textAlign: 'center'
   },
   artworkContainer: {
     width: 44,
     height: 44,
     borderRadius: 6,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    marginRight: 12,
+    marginRight: 12
   },
   activeArtworkContainer: {
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: Colors.primary
   },
   artwork: {
     width: 44,
-    height: 44,
+    height: 44
   },
   info: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 12
   },
   nameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 3,
+    marginBottom: 3
   },
   name: {
     fontSize: 16,
     color: Colors.text,
-    flex: 1,
-    fontWeight: '500',
-  },
-  fullTrackTag: {
-    fontSize: 10,
-    color: Colors.success,
-    backgroundColor: 'rgba(34, 197, 94, 0.1)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginLeft: 8,
-    fontWeight: '600',
+    fontWeight: '500'
   },
   artist: {
     fontSize: 14,
-    color: Colors.textSecondary,
-    letterSpacing: -0.1,
+    color: Colors.textSecondary
   },
   rightContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
     minWidth: 80,
-    justifyContent: 'flex-end',
-  },
-  durationContainer: {
-    width: 80,
-    alignItems: 'flex-end',
+    alignItems: 'flex-end'
   },
   duration: {
     fontSize: 14,
     color: Colors.textSecondary,
-    fontWeight: '500',
-    textAlign: 'right',
+    fontWeight: '500'
   },
   activeText: {
-    color: '#9747FF', // A vibrant purple that's still accessible
+    color: '#9747FF'
   },
   activeSubtext: {
     color: '#9747FF',
-    opacity: 0.75,
-  },
+    opacity: 0.75
+  }
 });
